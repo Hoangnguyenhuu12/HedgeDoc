@@ -1,0 +1,33 @@
+# Python & Virtual Environment
+.venv/
+venv/
+ENV/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Secrets & Environment Variables (QUAN TRỌNG: Không commit API Key)
+.env
+.env.local
+
+# Persistent Data & Vector Database
+data/vector_store/
+data/previews/
+
+# Testing & Cache
+.pytest_cache/
+.coverage
+
+# Notes & Non-Essential Documents
+ghichu.md
+data/raw_docs/Ca phe cung Tony*
+
+# IDE & OS
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
