@@ -4,6 +4,8 @@
 
 It supports multi-format document ingestion (**PDF, Word, Excel**), hybrid provider routing (**Google Gemini, OpenAI, and Local Ollama**), and an intuitive UI with on-the-fly model switching and cross-document comparison.
 
+![HedgeDoc Interface Demo](assets/hedgedoc_demo.png)
+
 ---
 
 ## Key Features
