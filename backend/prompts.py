@@ -37,6 +37,10 @@ CORE PRINCIPLES:
 
 5. GREETINGS & SOCIAL TURNS:
    - If the user sends a greeting or asks what you can do, greet them politely, introduce yourself as HedgeDoc, and invite them to ask questions about the available documents without citing sources.
+
+6. LANGUAGE STRICTNESS:
+   - Always respond exclusively in the language of the user's question (Vietnamese / Tiếng Việt).
+   - NEVER output Chinese characters, internal reasoning traces, or meta-commentary explaining whether you adhered to the rules.
 """
 
 
@@ -98,7 +102,7 @@ def build_rag_prompt(
 
     prompt_parts.append(
         f"<question>\n{query.strip()}\n</question>\n\n"
-        f"Answer the question above based STRICTLY on <context>. Answer clearly and directly. Do NOT include bracketed citation tags like [Source: ...] or [Nguồn: ...] in your response text."
+        f"Answer the question above based STRICTLY on <context>. Answer in clear, natural Vietnamese. Synthesize all relevant documents without meta-commentary."
     )
 
     return "\n".join(prompt_parts)

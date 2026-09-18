@@ -22,23 +22,29 @@ logger = logging.getLogger(__name__)
 def strip_inline_citations(text: str) -> str:
     """
     Remove inline citation brackets like [Source: ...], [Nguồn: ...], [Trang ...]
-    from generated text, as citations are displayed separately in the UI.
+    and any accidental Chinese characters from generated text.
     """
     import re
     cleaned = re.sub(r"\s*\[(?:Source|Nguồn|Trang|Page|Segment)[^\]]*\]", "", text, flags=re.IGNORECASE)
+    cleaned = re.sub(r"[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]+", "", cleaned)
+    cleaned = re.sub(r" {2,}", " ", cleaned)
     return cleaned.strip()
 
 
 def clean_citation_stream(token_stream: Iterator[str]) -> Iterator[str]:
     """
-    Real-time token stream filter that suppresses bracketed citations like
-    [Source: ...] or [Nguồn: ...] while streaming tokens to the frontend.
+    Real-time token stream filter that suppresses bracketed citations and Chinese characters
+    while streaming tokens to the frontend.
     """
+    import re
     buffer = ""
     inside_bracket = False
     last_yielded_ends_with_space = False
 
     for token in token_stream:
+        token = re.sub(r"[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]+", "", token)
+        if not token:
+            continue
         buffer += token
         while True:
             if not inside_bracket:
