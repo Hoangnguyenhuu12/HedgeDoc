@@ -7,8 +7,11 @@ import sys
 import io
 from pathlib import Path
 
-# Ensure UTF-8 stdout encoding on Windows
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
 
 from config import config
 from backend.providers.factory import ProviderFactory
@@ -17,7 +20,7 @@ from backend.prompts import build_rag_prompt, STRICT_RAG_SYSTEM_PROMPT
 from backend.rag_engine import RAGEngine
 
 
-def run_backend_tests():
+def test_backend_suite():
     print("=" * 70)
     print("STARTING BACKEND TEST SUITE (HEDGEDOC)")
     print("=" * 70)

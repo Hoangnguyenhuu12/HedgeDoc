@@ -55,9 +55,9 @@ HedgeDoc/
 │   ├── app.py              # Main Streamlit web application
 │   └── components.py       # Minimalist UI components & model selector
 ├── tests/
+│   ├── test_backend.py            # General backend test suite
+│   ├── test_multi_format.py       # Multi-format ingestion test suite
 │   └── test_ollama_and_factory.py # Ollama & ProviderFactory test suite
-├── test_backend.py         # General backend test suite
-├── test_multi_format.py    # Multi-format ingestion test suite
 ├── config.py               # Central application configuration
 ├── requirements.txt        # Python package dependencies
 └── README.md
@@ -146,17 +146,16 @@ To run entirely offline without external API costs or rate limits:
 
 ## Running Tests
 
-Run the automated test suites:
+Run the complete automated test suite:
 
 ```bash
-# Test multi-format ingestion (PDF, DOCX, XLSX)
-pytest test_multi_format.py -v
+# Run all automated test suites at once:
+pytest tests/ -v
 
-# Test Ollama provider, dynamic switching, and stream filtering
+# Or run individual test suites:
+pytest tests/test_backend.py -v
+pytest tests/test_multi_format.py -v
 pytest tests/test_ollama_and_factory.py -v
-
-# Test overall backend components
-pytest test_backend.py -v
 ```
 
 ---
