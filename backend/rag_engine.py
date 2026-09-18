@@ -4,16 +4,92 @@ Coordinates the entire RAG pipeline: PDF Loader -> Chunker -> ChromaDB -> Memory
 Serves as the primary backend interface for the frontend application.
 """
 
+import logging
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Iterator, Union
 from config import config
-from data_layer.loader import PDFDocumentLoader
+from data_layer.loader import MultiFormatDocumentLoader, PDFDocumentLoader
 from data_layer.chunker import DocumentChunker
 from data_layer.vector_store import VectorStoreManager
 from .providers.base import BaseLLM, BaseEmbedding
 from .providers.factory import ProviderFactory
 from .memory import ConversationMemoryBuffer
 from .prompts import STRICT_RAG_SYSTEM_PROMPT, build_rag_prompt
+
+logger = logging.getLogger(__name__)
+
+
+def strip_inline_citations(text: str) -> str:
+    """
+    Remove inline citation brackets like [Source: ...], [Nguồn: ...], [Trang ...]
+    from generated text, as citations are displayed separately in the UI.
+    """
+    import re
+    cleaned = re.sub(r"\s*\[(?:Source|Nguồn|Trang|Page|Segment)[^\]]*\]", "", text, flags=re.IGNORECASE)
+    return cleaned.strip()
+
+
+def clean_citation_stream(token_stream: Iterator[str]) -> Iterator[str]:
+    """
+    Real-time token stream filter that suppresses bracketed citations like
+    [Source: ...] or [Nguồn: ...] while streaming tokens to the frontend.
+    """
+    buffer = ""
+    inside_bracket = False
+    last_yielded_ends_with_space = False
+
+    for token in token_stream:
+        buffer += token
+        while True:
+            if not inside_bracket:
+                if "[" in buffer:
+                    prefix, rest = buffer.split("[", 1)
+                    if prefix:
+                        if last_yielded_ends_with_space and prefix.startswith(" "):
+                            prefix = prefix.lstrip(" ")
+                        if prefix:
+                            yield prefix
+                            last_yielded_ends_with_space = prefix.endswith(" ")
+                    buffer = "[" + rest
+                    inside_bracket = True
+                else:
+                    if buffer:
+                        chunk = buffer
+                        if last_yielded_ends_with_space and chunk.startswith(" "):
+                            chunk = chunk.lstrip(" ")
+                        if chunk:
+                            yield chunk
+                            last_yielded_ends_with_space = chunk.endswith(" ")
+                        buffer = ""
+                    break
+            else:
+                if "]" in buffer:
+                    bracket_content, remaining = buffer.split("]", 1)
+                    full_tag = bracket_content + "]"
+                    lower_tag = full_tag.lower()
+                    if any(k in lower_tag for k in ["source", "nguồn", "trang", "page", "segment"]):
+                        # Suppress citation tag
+                        pass
+                    else:
+                        yield full_tag
+                        last_yielded_ends_with_space = full_tag.endswith(" ")
+                    buffer = remaining
+                    inside_bracket = False
+                else:
+                    if len(buffer) > 120:
+                        yield buffer
+                        last_yielded_ends_with_space = buffer.endswith(" ")
+                        buffer = ""
+                        inside_bracket = False
+                    break
+
+    if buffer:
+        lower_tag = buffer.lower()
+        if not (inside_bracket and any(k in lower_tag for k in ["source", "nguồn", "trang", "page", "segment"])):
+            if last_yielded_ends_with_space and buffer.startswith(" "):
+                buffer = buffer.lstrip(" ")
+            if buffer:
+                yield buffer
 
 
 class RAGEngine:
@@ -37,11 +113,16 @@ class RAGEngine:
             persist_directory=config.VECTOR_STORE_DIR,
             collection_name=config.CHROMA_COLLECTION_NAME
         )
+        self._llm_cache: Dict[str, BaseLLM] = {}
         self.llm = llm or ProviderFactory.get_llm()
+        if llm:
+            self._llm_cache[f"{config.LLM_PROVIDER}:{llm.model_name}"] = llm
+        else:
+            self._llm_cache[f"{config.LLM_PROVIDER}:{self.llm.model_name}"] = self.llm
         self.embedding = embedding or ProviderFactory.get_embedding()
         self.memory = memory or ConversationMemoryBuffer()
 
-        self.loader = PDFDocumentLoader()
+        self.loader = MultiFormatDocumentLoader()
         self.chunker = DocumentChunker(
             chunk_size=config.CHUNK_SIZE,
             chunk_overlap=config.CHUNK_OVERLAP
@@ -57,63 +138,110 @@ class RAGEngine:
         Workflow: Extract text with page numbers -> Sentence chunking -> Generate embeddings -> Store in ChromaDB.
         """
         path = Path(pdf_path)
-        pages = self.loader.load_single_pdf(path)
-        if not pages:
+        try:
+            pages = self.loader.load_single_pdf(path)
+            if not pages:
+                return {
+                    "status": "empty",
+                    "doc_id": "unknown",
+                    "file_name": path.name,
+                    "total_pages": 0,
+                    "message": f"Không tìm thấy nội dung văn bản hợp lệ trong file '{path.name}'."
+                }
+
+            doc_id = pages[0].doc_id
+            file_name = pages[0].file_name
+            total_pages = pages[0].total_pages
+
+            # Check if already indexed to avoid duplicates
+            if not force_reindex and self.vector_store.is_document_indexed(doc_id):
+                return {
+                    "status": "already_indexed",
+                    "doc_id": doc_id,
+                    "file_name": file_name,
+                    "total_pages": total_pages,
+                    "message": f"Tài liệu '{file_name}' đã tồn tại trong kho lưu trữ."
+                }
+
+            # If force_reindex, remove old chunks first
+            if force_reindex and self.vector_store.is_document_indexed(doc_id):
+                self.vector_store.delete_document(doc_id)
+
+            # Chunk documents with page metadata
+            chunks = self.chunker.chunk_documents(pages)
+            if not chunks:
+                return {
+                    "status": "empty",
+                    "doc_id": doc_id,
+                    "file_name": file_name,
+                    "total_pages": total_pages,
+                    "message": f"Không thể trích xuất đoạn văn bản từ '{file_name}'."
+                }
+
+            # Generate embeddings in batches
+            texts = [c.text for c in chunks]
+            embeddings = self.embedding.embed_batch(texts)
+
+            # Store in ChromaDB
+            added_count = self.vector_store.add_chunks(chunks=chunks, embeddings=embeddings)
+
+            # Export human-readable Markdown inspection previews
+            self._export_readable_preview(pages=pages, chunks=chunks, pdf_name=file_name, doc_id=doc_id)
+
             return {
-                "status": "empty",
-                "doc_id": "unknown",
+                "status": "success",
+                "doc_id": doc_id,
+                "file_name": file_name,
+                "total_pages": total_pages,
+                "chunk_count": added_count,
+                "message": f"Đã nạp thành công '{file_name}' ({total_pages} trang, {added_count} đoạn dữ liệu)."
+            }
+        except Exception as e:
+            logger.error(f"Error indexing document {path.name}: {e}")
+            return {
+                "status": "error",
+                "doc_id": "error",
                 "file_name": path.name,
                 "total_pages": 0,
-                "message": "No valid text content found in the PDF file."
+                "message": f"Lỗi nạp file '{path.name}': {str(e)}"
             }
 
-        doc_id = pages[0].doc_id
-        file_name = pages[0].file_name
-        total_pages = pages[0].total_pages
-
-        # Check if already indexed to avoid duplicates
-        if not force_reindex and self.vector_store.is_document_indexed(doc_id):
-            return {
-                "status": "already_indexed",
-                "doc_id": doc_id,
-                "file_name": file_name,
-                "total_pages": total_pages,
-                "message": f"Document '{file_name}' already exists in the vector store."
-            }
-
-        # If force_reindex, remove old chunks first
-        if force_reindex and self.vector_store.is_document_indexed(doc_id):
+    def delete_document(self, doc_id: str, file_name: Optional[str] = None) -> bool:
+        """
+        Delete all chunks associated with a document ID from ChromaDB and clean up preview files.
+        """
+        try:
             self.vector_store.delete_document(doc_id)
+            if file_name:
+                import re
+                import shutil
+                preview_base = config.DATA_DIR / "previews"
+                clean_stem = re.sub(r"[^\w\s-]", "", Path(file_name).stem)
+                folder_name = re.sub(r"[-\s]+", "_", clean_stem).strip("_").lower()[:30]
+                doc_dir = preview_base / folder_name
+                if doc_dir.exists() and doc_dir.is_dir():
+                    shutil.rmtree(doc_dir, ignore_errors=True)
+            logger.info(f"Document {doc_id} ('{file_name}') successfully deleted.")
+            return True
+        except Exception as e:
+            logger.error(f"Error deleting document {doc_id}: {e}")
+            return False
 
-        # Chunk documents with page metadata
-        chunks = self.chunker.chunk_documents(pages)
-        if not chunks:
-            return {
-                "status": "empty",
-                "doc_id": doc_id,
-                "file_name": file_name,
-                "total_pages": total_pages,
-                "message": "No valid text found to chunk."
-            }
-
-        # Generate embeddings in batches
-        texts = [c.text for c in chunks]
-        embeddings = self.embedding.embed_batch(texts)
-
-        # Store in ChromaDB
-        added_count = self.vector_store.add_chunks(chunks=chunks, embeddings=embeddings)
-
-        # Export human-readable Markdown inspection previews
-        self._export_readable_preview(pages=pages, chunks=chunks, pdf_name=file_name, doc_id=doc_id)
-
-        return {
-            "status": "success",
-            "doc_id": doc_id,
-            "file_name": file_name,
-            "total_pages": total_pages,
-            "chunk_count": added_count,
-            "message": f"Successfully indexed {added_count} chunks from '{file_name}'."
-        }
+    def clear_all_documents(self) -> bool:
+        """Clear all indexed documents from ChromaDB and preview directory."""
+        try:
+            self.vector_store.clear_all()
+            preview_base = config.DATA_DIR / "previews"
+            if preview_base.exists():
+                import shutil
+                for item in preview_base.iterdir():
+                    if item.is_dir():
+                        shutil.rmtree(item, ignore_errors=True)
+            logger.info("All documents cleared from vector store and previews.")
+            return True
+        except Exception as e:
+            logger.error(f"Error clearing documents: {e}")
+            return False
 
     def _export_readable_preview(
         self,
@@ -160,10 +288,12 @@ class RAGEngine:
             text = c.get("text", "").strip()
             snippet = text[:200] + "..." if len(text) > 200 else text
 
+            loc_label = meta.get("location_label") or f"Trang {meta.get('page_number', 'N/A')}"
             citations.append({
                 "chunk_id": c.get("chunk_id"),
                 "file_name": meta.get("file_name", "Unknown"),
                 "page_number": meta.get("page_number", "N/A"),
+                "location_label": loc_label,
                 "distance": c.get("distance"),
                 "snippet": snippet
             })
@@ -234,16 +364,87 @@ class RAGEngine:
             f"- Phản hồi: Đối chiếu nội dung gốc và trả lời trọng tâm."
         )
 
+    def _detect_doc_filter(self, question: str) -> Optional[str]:
+        """Detect if the query explicitly targets a specific indexed document."""
+        import re
+        import unicodedata
+
+        def remove_accents(input_str: str) -> str:
+            nfkd_form = unicodedata.normalize('NFKD', input_str)
+            return "".join([c for c in nfkd_form if not unicodedata.combining(c)])
+
+        q_clean = re.sub(r"[^\w\s]", " ", remove_accents(question.lower())).strip()
+        docs = self.vector_store.get_indexed_documents_summary()
+
+        for d in docs:
+            fname = remove_accents(d["file_name"].lower())
+            stem = Path(fname).stem
+            clean_stem = re.sub(r"[_\-]", " ", stem).strip()
+
+            if fname in q_clean or clean_stem in q_clean:
+                return d["doc_id"]
+
+            stem_words = [w for w in clean_stem.split() if len(w) > 2 and not w.isdigit()]
+            if len(stem_words) >= 2:
+                matched_count = sum(1 for w in stem_words if w in q_clean)
+                if matched_count >= 2 and ("file" in q_clean or "tai lieu" in q_clean or matched_count == len(stem_words)):
+                    return d["doc_id"]
+
+        return None
+
+    def _is_cross_document_query(self, question: str) -> bool:
+        """
+        Detect if the user inquiry requires broad multi-document synthesis or comparison across all indexed documents.
+        """
+        import unicodedata
+        import re
+
+        def remove_accents(input_str: str) -> str:
+            nfkd_form = unicodedata.normalize('NFKD', input_str)
+            return "".join([c for c in nfkd_form if not unicodedata.combining(c)])
+
+        q = re.sub(r"[^\w\s]", " ", remove_accents(question.lower())).strip()
+
+        cross_patterns = [
+            "so sanh", "khac biet", "cac tai lieu", "tat ca tai lieu", "tat ca cac",
+            "toan bo tai lieu", "toan bo cac", "kho tai lieu", "tong quan cac", "diem giong",
+            "diem khac", "nhung tai lieu", "moi tai lieu", "cac file", "giua cac",
+            "co nhung tai lieu nao", "danh sach tai lieu", "tong hop cac", "chu de cot loi",
+            "all documents", "compare documents", "across documents", "every document", "each document"
+        ]
+
+        return any(p in q for p in cross_patterns)
+
+    def get_llm(
+        self,
+        provider: Optional[str] = None,
+        model_name: Optional[str] = None
+    ) -> BaseLLM:
+        """
+        Retrieve cached LLM adapter or instantiate a new one via ProviderFactory.
+        """
+        p = (provider or config.LLM_PROVIDER).lower()
+        m = model_name or config.LLM_MODEL
+        cache_key = f"{p}:{m}"
+        if cache_key not in self._llm_cache:
+            self._llm_cache[cache_key] = ProviderFactory.get_llm(provider=p, model_name=m)
+        return self._llm_cache[cache_key]
+
     def query(
         self,
         question: str,
         top_k: Optional[int] = None,
         doc_id_filter: Optional[str] = None,
-        stream: bool = False
+        stream: bool = False,
+        llm_provider: Optional[str] = None,
+        llm_model: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Execute the complete RAG lifecycle for an incoming question.
+        Supports dynamic provider and model selection.
         """
+        active_llm = self.get_llm(provider=llm_provider, model_name=llm_model)
+
         # Check if conversational greeting or meta question
         if self._is_greeting_or_meta(question):
             docs = self.vector_store.get_indexed_documents_summary()
@@ -286,13 +487,28 @@ class RAGEngine:
         # Step 1: Generate vector embedding for the query
         query_vector = self.embedding.embed_text(question)
 
-        # Step 2: Retrieve similar chunks from Vector Store
+        # Step 2: Retrieve similar chunks from Vector Store (with auto doc detection & cross-doc diversity)
+        all_indexed_docs = self.vector_store.get_indexed_documents_summary()
+        effective_filter = doc_id_filter or self._detect_doc_filter(question)
         k = top_k or config.TOP_K_RETRIEVAL
-        retrieved_chunks = self.vector_store.query(
-            query_embedding=query_vector,
-            top_k=k,
-            doc_id_filter=doc_id_filter
-        )
+        is_cross_doc = not effective_filter and self._is_cross_document_query(question)
+
+        if is_cross_doc and len(all_indexed_docs) > 1:
+            retrieved_chunks = []
+            per_doc_k = max(2, (k + len(all_indexed_docs) - 1) // len(all_indexed_docs))
+            for d in all_indexed_docs:
+                doc_chunks = self.vector_store.query(
+                    query_embedding=query_vector,
+                    top_k=per_doc_k,
+                    doc_id_filter=d["doc_id"]
+                )
+                retrieved_chunks.extend(doc_chunks)
+        else:
+            retrieved_chunks = self.vector_store.query(
+                query_embedding=query_vector,
+                top_k=k,
+                doc_id_filter=effective_filter
+            )
 
         # Extract citation metadata
         citations = self._extract_citations(retrieved_chunks)
@@ -332,27 +548,30 @@ class RAGEngine:
         history_text = self.memory.get_formatted_history()
 
         # Step 4: Package full prompt context
+        all_doc_names = [d["file_name"] for d in all_indexed_docs] if is_cross_doc else None
         full_prompt = build_rag_prompt(
             query=question,
             retrieved_chunks=retrieved_chunks,
-            history_text=history_text
+            history_text=history_text,
+            all_doc_names=all_doc_names
         )
 
         # Log user query to conversation memory
         self.memory.add_user_message(question)
 
-        # Step 5: Invoke LLM generation
+        # Step 5: Invoke LLM generation with chosen model
         if stream:
             def streaming_wrapper() -> Iterator[str]:
                 collected_chunks: List[str] = []
-                for token in self.llm.stream_generate(
+                raw_stream = active_llm.stream_generate(
                     prompt=full_prompt,
                     system_instruction=STRICT_RAG_SYSTEM_PROMPT
-                ):
+                )
+                for token in clean_citation_stream(raw_stream):
                     collected_chunks.append(token)
                     yield token
 
-                complete_answer = "".join(collected_chunks)
+                complete_answer = "".join(collected_chunks).strip()
                 self.memory.add_assistant_message(
                     content=complete_answer,
                     citations=citations
@@ -363,13 +582,16 @@ class RAGEngine:
                 "thought_process": thought_process,
                 "citations": citations,
                 "retrieved_chunks": retrieved_chunks,
-                "thinking_steps": thinking_steps
+                "thinking_steps": thinking_steps,
+                "model_name": active_llm.model_name,
+                "provider": llm_provider or config.LLM_PROVIDER
             }
         else:
-            answer = self.llm.generate(
+            raw_answer = active_llm.generate(
                 prompt=full_prompt,
                 system_instruction=STRICT_RAG_SYSTEM_PROMPT
             )
+            answer = strip_inline_citations(raw_answer)
             self.memory.add_assistant_message(
                 content=answer,
                 citations=citations
@@ -379,6 +601,8 @@ class RAGEngine:
                 "thought_process": thought_process,
                 "citations": citations,
                 "retrieved_chunks": retrieved_chunks,
-                "thinking_steps": thinking_steps
+                "thinking_steps": thinking_steps,
+                "model_name": active_llm.model_name,
+                "provider": llm_provider or config.LLM_PROVIDER
             }
 

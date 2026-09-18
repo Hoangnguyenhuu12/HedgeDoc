@@ -76,10 +76,12 @@ class DocumentChunker:
 
             if chunk_text:
                 chunk_id = f"{page.doc_id}_p{page.page_number}_c{chunk_idx}"
+                loc_label = getattr(page, "location_label", None) or f"Trang {page.page_number}"
                 metadata = {
                     "doc_id": page.doc_id,
                     "file_name": page.file_name,
                     "page_number": page.page_number,
+                    "location_label": loc_label,
                     "total_pages": page.total_pages,
                     "chunk_id": chunk_id,
                     "char_count": len(chunk_text),

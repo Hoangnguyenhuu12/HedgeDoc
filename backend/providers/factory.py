@@ -3,10 +3,11 @@ Provider Factory.
 Instantiates LLM and Embedding objects based on configuration, enabling provider swapping without code modifications.
 """
 
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from config import config
 from .base import BaseLLM, BaseEmbedding
 from .gemini_provider import GeminiLLM, GeminiEmbedding
+from .ollama_provider import OllamaLLM, OllamaEmbedding, check_ollama_status
 
 
 class ProviderFactory:
@@ -14,6 +15,43 @@ class ProviderFactory:
     Factory coordinating the instantiation of LLM and Embedding adapters.
     Enables pluggable providers without altering upper application layers.
     """
+
+    DEFAULT_MODELS: Dict[str, List[str]] = {
+        "gemini": [
+            "gemini-2.5-flash",
+            "gemini-flash-latest",
+            "gemini-2.5-flash-lite",
+            "gemini-3.5-flash",
+            "gemini-1.5-flash",
+            "gemini-1.5-pro"
+        ],
+        "openai": [
+            "gpt-4o-mini",
+            "gpt-4o",
+            "gpt-4-turbo",
+            "gpt-3.5-turbo"
+        ],
+        "ollama": [
+            "qwen2.5:7b",
+            "llama3.1:8b",
+            "deepseek-r1:8b",
+            "qwen2.5:3b",
+            "mistral:7b"
+        ]
+    }
+
+    @classmethod
+    def get_available_models(cls, provider: str) -> List[str]:
+        """
+        Return the list of suggested or locally discovered models for a given provider.
+        """
+        p = provider.lower()
+        if p == "ollama":
+            status = check_ollama_status()
+            if status["online"] and status["models"]:
+                return status["models"]
+            return cls.DEFAULT_MODELS.get("ollama", [])
+        return cls.DEFAULT_MODELS.get(p, [])
 
     @staticmethod
     def get_llm(
@@ -43,6 +81,12 @@ class ProviderFactory:
                 raise ImportError(
                     "The 'openai' package is not installed. Please run: pip install openai"
                 )
+        elif selected_provider == "ollama":
+            return OllamaLLM(
+                model_name=selected_model,
+                base_url=config.OLLAMA_BASE_URL,
+                temperature=selected_temp
+            )
         else:
             raise ValueError(f"LLM provider '{selected_provider}' is not supported.")
 
@@ -70,5 +114,10 @@ class ProviderFactory:
                 raise ImportError(
                     "The 'openai' package is not installed. Please run: pip install openai"
                 )
+        elif selected_provider == "ollama":
+            return OllamaEmbedding(
+                model_name=selected_model,
+                base_url=config.OLLAMA_BASE_URL
+            )
         else:
             raise ValueError(f"Embedding provider '{selected_provider}' is not supported.")
