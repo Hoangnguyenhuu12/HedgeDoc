@@ -53,6 +53,9 @@ st.set_page_config(
 
 inject_custom_css()
 
+# Auto hot-reload .env configuration on each session cycle
+config.reload()
+
 # Manage conversation memory in session state, re-instantiate RAGEngine fresh on each run
 if "memory" not in st.session_state:
     st.session_state.memory = ConversationMemoryBuffer()
@@ -84,6 +87,9 @@ with st.sidebar:
     )
 
     if uploaded_files:
+        if len(uploaded_files) > 5:
+            st.warning("⚠️ Khuyến nghị: Nên tải 3–5 tài liệu mỗi lượt để hệ thống xử lý nhanh và ổn định nhất.")
+
         new_files = [f for f in uploaded_files if f.name not in indexed_filenames]
         is_processing = st.session_state.get("is_processing_docs", False)
 
@@ -113,21 +119,32 @@ with st.sidebar:
 
         try:
             for idx, uploaded_file in enumerate(files_to_process, start=1):
-                progress_bar.progress((idx - 1) / total_count, text=f"Đang xử lý ({idx}/{total_count}): {uploaded_file.name}...")
                 save_path = config.RAW_DOCS_DIR / uploaded_file.name
                 with open(save_path, "wb") as f:
                     f.write(uploaded_file.getbuffer())
 
-                with st.spinner(f"Đang trích xuất & tạo vector: {uploaded_file.name}..."):
-                    res = engine.index_document(save_path, force_reindex=False)
-                    if res.get("status") == "success":
-                        success_count += 1
-                        total_pages_added += res.get("total_pages", 0)
-                        total_chunks_added += res.get("chunk_count", 0)
-                    elif res.get("status") == "error":
-                        errors.append(f"{uploaded_file.name}: {res.get('message', 'Lỗi')}")
+                def file_progress_cb(current, total, msg):
+                    pct = current / total if total > 0 else 1.0
+                    overall = (idx - 1) / total_count + (pct / total_count)
+                    progress_bar.progress(
+                        min(1.0, max(0.0, overall)),
+                        text=f"[{idx}/{total_count}] {uploaded_file.name}: {msg}"
+                    )
 
-            progress_bar.progress(1.0, text="Hoàn tất.")
+                res = engine.index_document(
+                    save_path,
+                    force_reindex=False,
+                    progress_callback=file_progress_cb
+                )
+
+                if res.get("status") in ["success", "already_indexed"]:
+                    success_count += 1
+                    total_pages_added += res.get("total_pages", 0)
+                    total_chunks_added += res.get("chunk_count", 0)
+                elif res.get("status") == "error":
+                    errors.append(f"{uploaded_file.name}: {res.get('message', 'Lỗi')}")
+
+            progress_bar.progress(1.0, text="Hoàn tất xử lý tài liệu.")
             if errors:
                 st.session_state["upload_status"] = {
                     "type": "error",
@@ -183,7 +200,11 @@ with st.sidebar:
         selected_provider, selected_model = render_model_selector()
         st.markdown("---")
         top_k = st.slider("Số đoạn trích xuất (Top-K)", min_value=1, max_value=8, value=config.TOP_K_RETRIEVAL)
-        st.caption(f"Embedding: `{config.EMBEDDING_MODEL}`")
+        st.caption(f"Embedding: `{config.EMBEDDING_PROVIDER}` (`{config.EMBEDDING_MODEL}`)")
+        if st.button("🔄 Nạp lại cấu hình .env", use_container_width=True, help="Tải lại các giá trị mới nhất từ file .env mà không cần restart server"):
+            config.reload()
+            st.toast("Đã nạp lại cấu hình từ .env!")
+            st.rerun()
 
     # Only show Clear Chat History button when there are messages
     if st.session_state.messages:

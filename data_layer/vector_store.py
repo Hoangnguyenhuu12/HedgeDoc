@@ -46,6 +46,14 @@ class VectorStoreManager:
         )
         return len(existing["ids"]) > 0
 
+    def get_existing_chunk_ids(self, doc_id: str) -> set:
+        """Retrieve the set of all chunk IDs already indexed for the specified doc_id."""
+        existing = self.collection.get(
+            where={"doc_id": doc_id},
+            include=[]
+        )
+        return set(existing.get("ids", []))
+
     def add_chunks(
         self,
         chunks: List[DocumentChunk],

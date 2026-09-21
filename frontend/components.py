@@ -3,6 +3,7 @@ Reusable UI Components.
 Renders citation cards, document sidebars, and custom minimalist CSS.
 """
 
+from pathlib import Path
 from typing import List, Dict, Any, Optional
 import streamlit as st
 
@@ -19,208 +20,15 @@ __all__ = [
     "render_model_selector"
 ]
 
+CSS_PATH = Path(__file__).parent / "styles.css"
+
 
 def inject_custom_css() -> None:
     """Inject custom minimalist CSS styles for Streamlit."""
-    st.markdown(
-        """
-        <style>
-        /* General typography and spacing */
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-        
-        html, body, [class*="css"] {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-        }
+    if CSS_PATH.exists():
+        css_content = CSS_PATH.read_text(encoding="utf-8")
+        st.markdown(f"<style>\n{css_content}\n</style>", unsafe_allow_html=True)
 
-        /* Header bar */
-        .app-header {
-            margin-bottom: 1.5rem;
-            padding-bottom: 1rem;
-            border-bottom: 1px solid rgba(128, 128, 128, 0.2);
-        }
-        .app-title {
-            font-size: 1.8rem;
-            font-weight: 700;
-            letter-spacing: -0.02em;
-            margin: 0;
-        }
-        .app-subtitle {
-            font-size: 0.95rem;
-            color: #6c757d;
-            margin-top: 0.25rem;
-        }
-
-        /* Citation Badge */
-        .citation-container {
-            margin-top: 0.8rem;
-            padding-top: 0.5rem;
-            border-top: 1px dashed rgba(128, 128, 128, 0.25);
-        }
-        .citation-badge {
-            display: inline-block;
-            padding: 0.2rem 0.5rem;
-            font-size: 0.75rem;
-            font-weight: 600;
-            border-radius: 4px;
-            background-color: rgba(66, 133, 244, 0.12);
-            color: #1a73e8;
-            margin-right: 0.4rem;
-            margin-bottom: 0.4rem;
-            border: 1px solid rgba(66, 133, 244, 0.25);
-        }
-        .citation-snippet {
-            font-size: 0.85rem;
-            line-height: 1.5;
-            color: #495057;
-            background: rgba(0, 0, 0, 0.02);
-            padding: 0.6rem 0.8rem;
-            border-radius: 6px;
-            border-left: 3px solid #1a73e8;
-            margin-top: 0.3rem;
-            font-style: italic;
-        }
-
-        /* Sidebar Document List */
-        div[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] {
-            align-items: center !important;
-            margin-bottom: 0.35rem !important;
-        }
-        div[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] div[data-testid="column"] {
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-        }
-        div[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] div[data-testid="column"]:first-child {
-            justify-content: flex-start !important;
-        }
-        div[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] div[data-testid="stMarkdownContainer"] {
-            width: 100% !important;
-        }
-        div[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] div[data-testid="stButton"] {
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            width: 100% !important;
-            margin: 0 !important;
-        }
-        .sidebar-doc-card {
-            padding: 0 0.65rem;
-            background: rgba(128, 128, 128, 0.05);
-            border-radius: 6px;
-            border: 1px solid rgba(128, 128, 128, 0.15);
-            transition: all 0.15s ease;
-            height: 38px;
-            min-height: 38px;
-            max-height: 38px;
-            display: flex;
-            align-items: center;
-            box-sizing: border-box;
-            margin: 0 !important;
-            width: 100%;
-        }
-        .sidebar-doc-card:hover {
-            background: rgba(128, 128, 128, 0.09);
-            border-color: rgba(128, 128, 128, 0.25);
-        }
-        .sidebar-doc-title {
-            font-size: 0.82rem;
-            font-weight: 500;
-            line-height: 38px;
-            word-break: break-word;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            width: 100%;
-        }
-
-        /* Minimalist remove button in sidebar */
-        div[data-testid="stSidebar"] button[kind="tertiary"] {
-            color: #8a8f98 !important;
-            background: transparent !important;
-            border: none !important;
-            padding: 0 !important;
-            font-size: 0.95rem !important;
-            line-height: 38px !important;
-            height: 38px !important;
-            min-height: 38px !important;
-            max-height: 38px !important;
-            width: 100% !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            border-radius: 4px !important;
-            transition: all 0.15s ease !important;
-            margin: 0 !important;
-        }
-        div[data-testid="stSidebar"] button[kind="tertiary"]:hover {
-            color: #ef4444 !important;
-            background: rgba(239, 68, 68, 0.12) !important;
-        }
-
-        /* Confirmation Dialog styling */
-        div[role="dialog"] button[kind="primary"] {
-            background-color: #ef4444 !important;
-            border-color: #ef4444 !important;
-            color: #ffffff !important;
-        }
-        div[role="dialog"] button[kind="primary"]:hover {
-            background-color: #dc2626 !important;
-            border-color: #dc2626 !important;
-        }
-
-        /* Starter Prompt Chips */
-        .prompts-container {
-            margin-top: 1.2rem;
-            margin-bottom: 0.8rem;
-        }
-        .prompts-label {
-            font-size: 0.76rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: #71717a;
-            font-weight: 600;
-        }
-        div[data-testid="stMainBlockContainer"] div[data-testid="column"] button[kind="secondary"] {
-            text-align: left !important;
-            justify-content: flex-start !important;
-            font-size: 0.82rem !important;
-            line-height: 1.4 !important;
-            padding: 0.65rem 0.85rem !important;
-            border-radius: 6px !important;
-            border: 1px solid rgba(128, 128, 128, 0.15) !important;
-            background: rgba(128, 128, 128, 0.03) !important;
-            color: #d4d4d8 !important;
-            height: auto !important;
-            min-height: 56px !important;
-            transition: all 0.15s ease !important;
-        }
-        div[data-testid="stMainBlockContainer"] div[data-testid="column"] button[kind="secondary"]:hover {
-            border-color: rgba(128, 128, 128, 0.35) !important;
-            background: rgba(128, 128, 128, 0.07) !important;
-            color: #ffffff !important;
-        }
-
-        /* Minimal Expander */
-        div[data-testid="stExpander"] {
-            border: 1px solid rgba(128, 128, 128, 0.15) !important;
-            border-radius: 6px !important;
-            background: transparent !important;
-            margin-bottom: 0.5rem !important;
-        }
-        div[data-testid="stExpander"] details summary p {
-            font-size: 0.82rem !important;
-            color: #8a8f98 !important;
-            font-weight: 500 !important;
-        }
-        div[data-testid="stExpander"] div[data-testid="stExpanderDetails"] {
-            font-size: 0.85rem !important;
-            color: #a1a1aa !important;
-            line-height: 1.6 !important;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
 
 
 def render_header(scope_label: str = "All documents") -> None:
@@ -266,11 +74,19 @@ def render_citation_cards(citations: List[Dict[str, Any]]) -> None:
         for cit in citations:
             file_name = cit.get("file_name", "Document")
             loc_label = cit.get("location_label") or f"Trang {cit.get('page_number', 'N/A')}"
+            rerank_score = cit.get("rerank_score")
             distance = cit.get("distance")
-            dist_str = f" (Distance: {distance:.4f})" if distance is not None else ""
+
+            score_parts = []
+            if rerank_score is not None:
+                score_parts.append(f"Độ khớp: {rerank_score * 100:.0f}%")
+            elif distance is not None:
+                score_parts.append(f"Dist: {distance:.4f}")
+            score_str = f" • *{', '.join(score_parts)}*" if score_parts else ""
+
             snippet = cit.get("snippet", "").strip()
 
-            st.markdown(f"**{file_name} - {loc_label}**{dist_str}")
+            st.markdown(f"**{file_name} - {loc_label}**{score_str}")
             if snippet:
                 st.markdown(f'<div class="citation-snippet">"{snippet}"</div>', unsafe_allow_html=True)
             st.markdown("")
@@ -337,50 +153,54 @@ def render_copy_button(text: str, key_suffix: str = "") -> None:
     return
 
 
+DEFAULT_SUGGESTED_QUESTIONS: List[str] = [
+    "Tóm tắt các chủ đề cốt lõi trong kho tài liệu hiện tại",
+    "So sánh các điểm khác biệt chính giữa các tài liệu đã nạp",
+    "Tài liệu nào chứa nội dung liên quan đến quy trình hoặc hướng dẫn?"
+]
+
+TOPIC_SUGGESTIONS: Dict[tuple, List[str]] = {
+    ("hoang-tu-be", "hoang tu be", "little prince"): [
+        "Ý nghĩa cuộc gặp gỡ giữa Hoàng tử bé và con cáo là gì?",
+        "Tác phẩm gửi gắm thông điệp gì về tình bạn, tình yêu và trách nhiệm?",
+        "Tóm tắt chuyến hành trình của Hoàng tử bé qua các tiểu hành tinh"
+    ],
+    ("tony", "ca phe"): [
+        "Những lời khuyên cốt lõi của Dượng Tony về tinh thần tự lập và thái độ sống?",
+        "Tác giả chia sẻ quan điểm gì về việc học ngoại ngữ và văn hóa đi làm?",
+        "Tóm tắt những câu chuyện truyền cảm hứng nổi bật trong cuốn sách"
+    ],
+    ("manual", "guide", "huong dan"): [
+        "Tài liệu này bao gồm những quy trình hướng dẫn cụ thể nào?",
+        "Các bước thực hiện chuẩn được mô tả như thế nào?",
+        "Những lưu ý an toàn và cảnh báo quan trọng nhất cần tuân thủ?"
+    ],
+    ("report", "bao cao", "finance"): [
+        "Tóm tắt các kết quả và chỉ số quan trọng nhất trong báo cáo",
+        "Những rủi ro và thách thức chính được đề cập là gì?",
+        "Các đề xuất và định hướng tiếp theo trong tài liệu?"
+    ]
+}
+
+
 def get_suggested_questions(selected_scope_label: Optional[str] = None) -> List[str]:
     """Generate context-aware starter questions tailored to the active document."""
     if not selected_scope_label or selected_scope_label.startswith("All documents"):
-        return [
-            "Tóm tắt các chủ đề cốt lõi trong kho tài liệu hiện tại",
-            "So sánh các điểm khác biệt chính giữa các tài liệu đã nạp",
-            "Tài liệu nào chứa nội dung liên quan đến quy trình hoặc hướng dẫn?"
-        ]
+        return DEFAULT_SUGGESTED_QUESTIONS
 
-    # Clean label to extract filename
     clean_name = selected_scope_label.split(" (")[0]
     name_lower = clean_name.lower()
 
-    if "hoang-tu-be" in name_lower or "hoang tu be" in name_lower or "little prince" in name_lower:
-        return [
-            "Ý nghĩa cuộc gặp gỡ giữa Hoàng tử bé và con cáo là gì?",
-            "Tác phẩm gửi gắm thông điệp gì về tình bạn, tình yêu và trách nhiệm?",
-            "Tóm tắt chuyến hành trình của Hoàng tử bé qua các tiểu hành tinh"
-        ]
-    elif "tony" in name_lower or "ca phe" in name_lower:
-        return [
-            "Những lời khuyên cốt lõi của Dượng Tony về tinh thần tự lập và thái độ sống?",
-            "Tác giả chia sẻ quan điểm gì về việc học ngoại ngữ và văn hóa đi làm?",
-            "Tóm tắt những câu chuyện truyền cảm hứng nổi bật trong cuốn sách"
-        ]
-    elif "manual" in name_lower or "guide" in name_lower or "huong dan" in name_lower:
-        return [
-            "Tài liệu này bao gồm những quy trình hướng dẫn cụ thể nào?",
-            "Các bước thực hiện chuẩn được mô tả như thế nào?",
-            "Những lưu ý an toàn và cảnh báo quan trọng nhất cần tuân thủ?"
-        ]
-    elif "report" in name_lower or "bao cao" in name_lower or "finance" in name_lower:
-        return [
-            "Tóm tắt các kết quả và chỉ số quan trọng nhất trong báo cáo",
-            "Những rủi ro và thách thức chính được đề cập là gì?",
-            "Các đề xuất và định hướng tiếp theo trong tài liệu?"
-        ]
-    else:
-        stem = clean_name.rsplit(".", 1)[0]
-        return [
-            f"Tóm tắt ngắn gọn các luận điểm chính trong {stem}",
-            f"Những nội dung và khái niệm quan trọng nhất cần nắm được?",
-            f"Tài liệu này đưa ra các phân tích hoặc giải pháp cụ thể nào?"
-        ]
+    for keywords, questions in TOPIC_SUGGESTIONS.items():
+        if any(kw in name_lower for kw in keywords):
+            return questions
+
+    stem = clean_name.rsplit(".", 1)[0]
+    return [
+        f"Tóm tắt ngắn gọn các luận điểm chính trong {stem}",
+        f"Những nội dung và khái niệm quan trọng nhất cần nắm được?",
+        f"Tài liệu này đưa ra các phân tích hoặc giải pháp cụ thể nào?"
+    ]
 
 
 def render_suggested_prompts(prompts: List[str]) -> Optional[str]:

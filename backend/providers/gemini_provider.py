@@ -21,10 +21,9 @@ class GeminiLLM(BaseLLM):
 
     FALLBACK_MODELS = [
         "gemini-2.5-flash",
-        "gemini-flash-latest",
-        "gemini-2.5-flash-lite",
         "gemini-3.5-flash",
         "gemini-3.5-flash-lite",
+        "gemini-flash-latest",
     ]
 
     def __init__(
@@ -76,7 +75,8 @@ class GeminiLLM(BaseLLM):
                 return response.text if response.text else ""
             except Exception as e:
                 last_err = e
-                if "429" in str(e) or "ResourceExhausted" in type(e).__name__:
+                err_text = str(e).lower()
+                if "429" in err_text or "resourceexhausted" in type(e).__name__.lower() or "notfound" in type(e).__name__.lower() or "404" in err_text:
                     self.exhausted_models.add(m_name)
                     continue
                 raise e
@@ -102,7 +102,8 @@ class GeminiLLM(BaseLLM):
                 break
             except Exception as e:
                 last_err = e
-                if "429" in str(e) or "ResourceExhausted" in type(e).__name__:
+                err_text = str(e).lower()
+                if "429" in err_text or "resourceexhausted" in type(e).__name__.lower() or "notfound" in type(e).__name__.lower() or "404" in err_text:
                     self.exhausted_models.add(m_name)
                     continue
                 raise e

@@ -196,9 +196,45 @@ class OllamaEmbedding(BaseEmbedding):
         batch_size: int = 50
     ) -> List[List[float]]:
         """
-        Batch embed multiple text strings.
+        Batch embed multiple text strings using Ollama /api/embed endpoint.
+        Falls back to /api/embeddings if /api/embed is unavailable.
         """
+        if not texts:
+            return []
+
+        cleaned_texts = [t.strip() if t.strip() else " " for t in texts]
         results: List[List[float]] = []
-        for text in texts:
-            results.append(self.embed_text(text))
-        return results
+
+        try:
+            for i in range(0, len(cleaned_texts), batch_size):
+                batch = cleaned_texts[i:i + batch_size]
+                payload = {
+                    "model": self.model_name,
+                    "input": batch
+                }
+                resp = requests.post(
+                    f"{self.base_url}/api/embed",
+                    json=payload,
+                    timeout=120
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    embs = data.get("embeddings", [])
+                    if embs and len(embs) == len(batch):
+                        results.extend(embs)
+                        continue
+
+                # Fallback for this batch
+                for text in batch:
+                    results.append(self.embed_text(text))
+            return results
+        except requests.exceptions.ConnectionError:
+            raise ConnectionError(
+                f"Không thể kết nối đến Ollama tại {self.base_url}."
+            )
+        except Exception:
+            # Sequential fallback
+            results = []
+            for text in cleaned_texts:
+                results.append(self.embed_text(text))
+            return results

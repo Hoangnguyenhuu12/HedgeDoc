@@ -34,28 +34,32 @@ class DocumentChunker:
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
 
-    def _find_split_point(self, text: str, target_pos: int) -> int:
+    def _find_split_point(self, text: str, start_pos: int, target_pos: int) -> int:
         """
         Find the nearest natural split boundary (paragraph break, period, punctuation, space)
-        to prevent splitting words or sentences abruptly.
+        within [start_pos, target_pos] to prevent splitting words or sentences abruptly.
         """
         if target_pos >= len(text):
             return len(text)
 
+        min_progress = max(start_pos + int(self.chunk_size * 0.4), start_pos + 1)
+        if min_progress >= target_pos:
+            return target_pos
+
         # Prioritize paragraph breaks
-        paragraph_break = text.rfind("\n\n", 0, target_pos)
-        if paragraph_break > target_pos * 0.7:
+        paragraph_break = text.rfind("\n\n", min_progress, target_pos)
+        if paragraph_break != -1:
             return paragraph_break + 2
 
         # Look for sentence-ending punctuation (. ? !)
         for punct in [". ", "? ", "! ", ".\n", "?\n", "!\n"]:
-            punct_pos = text.rfind(punct, 0, target_pos)
-            if punct_pos > target_pos * 0.6:
+            punct_pos = text.rfind(punct, min_progress, target_pos)
+            if punct_pos != -1:
                 return punct_pos + len(punct)
 
         # Fallback to whitespace to prevent word severance
-        space_pos = text.rfind(" ", 0, target_pos)
-        if space_pos > target_pos * 0.5:
+        space_pos = text.rfind(" ", min_progress, target_pos)
+        if space_pos != -1:
             return space_pos + 1
 
         # Worst-case scenario (very long uninterrupted token)
@@ -64,13 +68,39 @@ class DocumentChunker:
     def chunk_page(self, page: ExtractedPage) -> List[DocumentChunk]:
         """Split a single page into chunks."""
         text = page.text
+
+        # For Excel spreadsheets, ExcelDocumentLoader already segments rows into coherent tables with headers.
+        # Preserve table integrity if the block size is within reasonable bounds (<= 2500 chars)
+        if page.file_name.lower().endswith((".xlsx", ".xls")) and len(text) <= 2500:
+            chunk_id = f"{page.doc_id}_p{page.page_number}_c0"
+            loc_label = getattr(page, "location_label", None) or f"Trang {page.page_number}"
+            metadata = {
+                "doc_id": page.doc_id,
+                "file_name": page.file_name,
+                "page_number": page.page_number,
+                "location_label": loc_label,
+                "total_pages": page.total_pages,
+                "chunk_id": chunk_id,
+                "char_count": len(text),
+            }
+            return [
+                DocumentChunk(
+                    chunk_id=chunk_id,
+                    doc_id=page.doc_id,
+                    file_name=page.file_name,
+                    page_number=page.page_number,
+                    text=text,
+                    metadata=metadata,
+                )
+            ]
+
         chunks: List[DocumentChunk] = []
         start_idx = 0
         chunk_idx = 0
 
         while start_idx < len(text):
             target_end = start_idx + self.chunk_size
-            split_end = self._find_split_point(text, target_end)
+            split_end = self._find_split_point(text, start_idx, target_end)
 
             chunk_text = text[start_idx:split_end].strip()
 
@@ -103,8 +133,8 @@ class DocumentChunker:
                 break
 
             # Advance sliding pointer with overlap offset
-            step = (split_end - start_idx) - self.chunk_overlap
-            start_idx += max(1, step)
+            next_start = max(start_idx + 1, split_end - self.chunk_overlap)
+            start_idx = next_start
 
         return chunks
 

@@ -3,7 +3,7 @@ Anti-hallucination Prompt Engine (Strict Grounding & Citation Traceability).
 Enforces zero hallucination, strict factual discipline, and page-level citations for LLMs.
 """
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 STRICT_RAG_SYSTEM_PROMPT = """You are HedgeDoc, an intelligent document analysis and retrieval system with precise page-level citations.
 
@@ -39,7 +39,12 @@ CORE PRINCIPLES:
    - If the user sends a greeting or asks what you can do, greet them politely, introduce yourself as HedgeDoc, and invite them to ask questions about the available documents without citing sources.
 
 6. LANGUAGE STRICTNESS:
-   - Always respond exclusively in the language of the user's question (Vietnamese / Tiếng Việt).
+   - Always respond strictly in the same language as the user's question:
+     * If the user asks in English -> Respond entirely in fluent, professional English.
+     * If the user asks in Vietnamese -> Respond entirely in natural, accurate Vietnamese.
+   - Cross-Lingual Synthesis:
+     * When the source context is in English but the question is in Vietnamese, translate and synthesize the facts accurately into Vietnamese.
+     * When the source context is in Vietnamese but the question is in English, translate and synthesize the facts accurately into English.
    - NEVER output Chinese characters, internal reasoning traces, or meta-commentary explaining whether you adhered to the rules.
 """
 
@@ -102,7 +107,9 @@ def build_rag_prompt(
 
     prompt_parts.append(
         f"<question>\n{query.strip()}\n</question>\n\n"
-        f"Answer the question above based STRICTLY on <context>. Answer in clear, natural Vietnamese. Synthesize all relevant documents without meta-commentary."
+        f"Answer the question above based STRICTLY on <context>. "
+        f"Respond in the same language as the question (e.g. English for English questions, Vietnamese for Vietnamese questions). "
+        f"Synthesize all relevant information directly without meta-commentary."
     )
 
     return "\n".join(prompt_parts)

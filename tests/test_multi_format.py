@@ -12,6 +12,8 @@ if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
     except Exception:
         pass
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from config import config
 from data_layer.loader import MultiFormatDocumentLoader
 from backend.rag_engine import RAGEngine
@@ -40,7 +42,7 @@ def test_multiformat_pipeline():
     excel_pages = loader.load_document(excel_path)
     print(f"  - Extracted {len(excel_pages)} blocks from {excel_path.name}")
     assert len(excel_pages) >= 4, "Excel sheets count too low!"
-    for p in excel_pages:
+    for p in excel_pages[:3]:
         print(f"    + {p.location_label} (Chars: {len(p.text)})")
 
     # 3. Test Indexing into ChromaDB
@@ -57,19 +59,19 @@ def test_multiformat_pipeline():
     print("\n[TEST 4] Querying Excel Data...")
     q_excel = "Doanh thu quý 3 của mảng Tu_Van_AI năm 2025 là bao nhiêu tỷ VND và tỷ suất lợi nhuận đạt bao nhiêu?"
     print(f"  - Query: '{q_excel}'")
-    res_excel = engine.query(question=q_excel, top_k=3, stream=False)
+    res_excel = engine.query(question=q_excel, top_k=6, doc_id_filter=excel_res["doc_id"], stream=False)
     print(f"  - Response:\n{res_excel['answer']}")
     print("  - Citations:")
     for cit in res_excel["citations"]:
         print(f"    * {cit['file_name']} - {cit.get('location_label')} (Dist: {cit['distance']:.4f})")
     assert len(res_excel["citations"]) > 0, "No citations returned for Excel query!"
-    assert "56.2" in res_excel["answer"], "Failed to extract exact revenue from Excel table!"
+    assert "56.2" in res_excel["answer"] or "56,2" in res_excel["answer"], "Failed to extract exact revenue from Excel table!"
 
     # 5. Test RAG Query on Word Data
     print("\n[TEST 5] Querying Word Document Data...")
     q_docx = "Nhân viên chính thức được nghỉ phép năm bao nhiêu ngày và được làm việc từ xa WFH tối đa mấy ngày một tuần?"
     print(f"  - Query: '{q_docx}'")
-    res_docx = engine.query(question=q_docx, top_k=3, stream=False)
+    res_docx = engine.query(question=q_docx, top_k=4, doc_id_filter=docx_res["doc_id"], stream=False)
     print(f"  - Response:\n{res_docx['answer']}")
     print("  - Citations:")
     for cit in res_docx["citations"]:

@@ -6,17 +6,50 @@ Serves as the primary backend interface for the frontend application.
 
 import logging
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Iterator, Union
+from typing import List, Dict, Any, Optional, Iterator, Union, Callable
 from config import config
 from data_layer.loader import MultiFormatDocumentLoader, PDFDocumentLoader
 from data_layer.chunker import DocumentChunker
 from data_layer.vector_store import VectorStoreManager
 from .providers.base import BaseLLM, BaseEmbedding
+import unicodedata
 from .providers.factory import ProviderFactory
 from .memory import ConversationMemoryBuffer
 from .prompts import STRICT_RAG_SYSTEM_PROMPT, build_rag_prompt
+from .reranker import HybridReranker
 
 logger = logging.getLogger(__name__)
+
+# Linguistic & Query Pattern Constants
+VIETNAMESE_DIACRITICS = "àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ"
+
+GREETING_KEYWORDS = {
+    "hi", "hello", "xin chao", "xin chào", "chào", "chao", "chào bạn", "chao ban",
+    "chao bot", "chào bot", "hey", "alô", "alo", "bạn là ai", "ban la ai", "who are you",
+    "bạn có thể làm gì", "ban co the lam gi", "hướng dẫn", "huong dan", "help",
+    "giới thiệu", "gioi thieu", "hedgedoc là gì", "hedgedoc la gi"
+}
+
+GREETING_PREFIXES = ("hi", "hello", "xin chào", "chào bạn", "chào", "chao")
+
+CONTENT_TRIGGER_KEYWORDS = (
+    "tóm tắt", "tom tat", "tài liệu", "tai lieu", "trang", "sách", "sach",
+    "nội dung", "noi dung", "tìm", "tim"
+)
+
+CROSS_DOCUMENT_PATTERNS = (
+    "so sanh", "khac biet", "cac tai lieu", "tat ca tai lieu", "tat ca cac",
+    "toan bo tai lieu", "toan bo cac", "kho tai lieu", "tong quan cac", "diem giong",
+    "diem khac", "nhung tai lieu", "moi tai lieu", "cac file", "giua cac",
+    "co nhung tai lieu nao", "danh sach tai lieu", "tong hop cac", "chu de cot loi",
+    "all documents", "compare documents", "across documents", "every document", "each document"
+)
+
+
+def remove_accents(input_str: str) -> str:
+    """Normalize and strip combining diacritical marks from a string."""
+    nfkd_form = unicodedata.normalize('NFKD', input_str)
+    return "".join([c for c in nfkd_form if not unicodedata.combining(c)])
 
 
 def strip_inline_citations(text: str) -> str:
@@ -133,19 +166,22 @@ class RAGEngine:
             chunk_size=config.CHUNK_SIZE,
             chunk_overlap=config.CHUNK_OVERLAP
         )
+        self.reranker = HybridReranker()
 
     def index_document(
         self,
         pdf_path: Union[str, Path],
-        force_reindex: bool = False
+        force_reindex: bool = False,
+        progress_callback: Optional[Callable[[int, int, str], None]] = None,
+        batch_size: int = 40
     ) -> Dict[str, Any]:
         """
-        Index a PDF document into the ChromaDB vector store.
-        Workflow: Extract text with page numbers -> Sentence chunking -> Generate embeddings -> Store in ChromaDB.
+        Index a document (PDF, Word, Excel) into the ChromaDB vector store.
+        Workflow: Extract pages/sections -> Sentence chunking -> Resumable Batch Embedding & Persistence -> Store in ChromaDB.
         """
         path = Path(pdf_path)
         try:
-            pages = self.loader.load_single_pdf(path)
+            pages = self.loader.load_document(path)
             if not pages:
                 return {
                     "status": "empty",
@@ -159,21 +195,7 @@ class RAGEngine:
             file_name = pages[0].file_name
             total_pages = pages[0].total_pages
 
-            # Check if already indexed to avoid duplicates
-            if not force_reindex and self.vector_store.is_document_indexed(doc_id):
-                return {
-                    "status": "already_indexed",
-                    "doc_id": doc_id,
-                    "file_name": file_name,
-                    "total_pages": total_pages,
-                    "message": f"Tài liệu '{file_name}' đã tồn tại trong kho lưu trữ."
-                }
-
-            # If force_reindex, remove old chunks first
-            if force_reindex and self.vector_store.is_document_indexed(doc_id):
-                self.vector_store.delete_document(doc_id)
-
-            # Chunk documents with page metadata
+            # Chunk documents with page/section metadata
             chunks = self.chunker.chunk_documents(pages)
             if not chunks:
                 return {
@@ -184,23 +206,71 @@ class RAGEngine:
                     "message": f"Không thể trích xuất đoạn văn bản từ '{file_name}'."
                 }
 
-            # Generate embeddings in batches
-            texts = [c.text for c in chunks]
-            embeddings = self.embedding.embed_batch(texts)
+            total_chunks = len(chunks)
 
-            # Store in ChromaDB
-            added_count = self.vector_store.add_chunks(chunks=chunks, embeddings=embeddings)
+            # If force_reindex, remove old chunks first
+            if force_reindex and self.vector_store.is_document_indexed(doc_id):
+                self.vector_store.delete_document(doc_id)
+                existing_chunk_ids = set()
+            else:
+                existing_chunk_ids = self.vector_store.get_existing_chunk_ids(doc_id)
+
+            # Check if document is already 100% indexed
+            if not force_reindex and existing_chunk_ids and len(existing_chunk_ids) >= total_chunks:
+                return {
+                    "status": "already_indexed",
+                    "doc_id": doc_id,
+                    "file_name": file_name,
+                    "total_pages": total_pages,
+                    "chunk_count": len(existing_chunk_ids),
+                    "message": f"Tài liệu '{file_name}' đã tồn tại đầy đủ ({len(existing_chunk_ids)} đoạn) trong kho lưu trữ."
+                }
+
+            # Filter pending chunks to support resumable / incremental indexing
+            pending_chunks = [c for c in chunks if c.chunk_id not in existing_chunk_ids]
+            is_resumed = len(existing_chunk_ids) > 0 and len(pending_chunks) < total_chunks
+            already_done = total_chunks - len(pending_chunks)
+
+            if is_resumed:
+                logger.info(
+                    f"Resuming indexing for '{file_name}': {already_done}/{total_chunks} chunks already stored, {len(pending_chunks)} remaining."
+                )
+
+            # Save-per-batch loop: embed and immediately persist to ChromaDB
+            newly_added = 0
+            total_batches = (len(pending_chunks) + batch_size - 1) // batch_size
+
+            for b_idx, i in enumerate(range(0, len(pending_chunks), batch_size), start=1):
+                batch_chunks = pending_chunks[i:i + batch_size]
+                current_done = already_done + i
+
+                status_msg = f"Đang tạo vector & lưu: {current_done}/{total_chunks} đoạn (lô {b_idx}/{total_batches})..."
+                if progress_callback:
+                    progress_callback(current_done, total_chunks, status_msg)
+
+                batch_texts = [c.text for c in batch_chunks]
+                batch_embeddings = self.embedding.embed_batch(batch_texts)
+
+                # Persist batch immediately to ChromaDB
+                added = self.vector_store.add_chunks(chunks=batch_chunks, embeddings=batch_embeddings)
+                newly_added += added
+
+            # Final progress callback
+            if progress_callback:
+                progress_callback(total_chunks, total_chunks, f"Hoàn tất lưu toàn bộ {total_chunks} đoạn.")
 
             # Export human-readable Markdown inspection previews
             self._export_readable_preview(pages=pages, chunks=chunks, pdf_name=file_name, doc_id=doc_id)
 
+            resumed_note = f" (đã nạp tiếp {newly_added} đoạn còn thiếu)" if is_resumed else ""
             return {
                 "status": "success",
                 "doc_id": doc_id,
                 "file_name": file_name,
                 "total_pages": total_pages,
-                "chunk_count": added_count,
-                "message": f"Đã nạp thành công '{file_name}' ({total_pages} trang, {added_count} đoạn dữ liệu)."
+                "chunk_count": total_chunks,
+                "newly_added": newly_added,
+                "message": f"Đã nạp thành công '{file_name}' ({total_pages} trang, {total_chunks} đoạn dữ liệu){resumed_note}."
             }
         except Exception as e:
             logger.error(f"Error indexing document {path.name}: {e}")
@@ -286,8 +356,42 @@ class RAGEngine:
         except Exception:
             pass
 
+    def _contains_vietnamese(self, text: str) -> bool:
+        """Check if text contains Vietnamese-specific diacritical characters."""
+        lower = text.lower()
+        return any(c in lower for c in VIETNAMESE_DIACRITICS)
+
+    def _translate_or_expand_query(self, question: str, llm: BaseLLM) -> Optional[str]:
+        """
+        Translate/expand a Vietnamese query into an English search query for cross-lingual retrieval.
+        """
+        if not self._contains_vietnamese(question):
+            return None
+
+        prompt = (
+            "You are a search query translator for a book retrieval system. "
+            "Translate the following Vietnamese user question into a clear, concise English search query "
+            "focusing on the main keywords, entities, and concepts.\n\n"
+            f"Vietnamese question: {question}\n\n"
+            "Respond ONLY with the translated English query directly, no explanations, no quotes."
+        )
+
+        try:
+            translated = llm.generate(
+                prompt=prompt,
+                system_instruction="Translate Vietnamese query to English search keywords."
+            ).strip()
+            translated = translated.strip('"\'`').strip()
+            if translated and translated.lower() != question.lower():
+                logger.info(f"Cross-Lingual translation: '{question}' -> '{translated}'")
+                return translated
+        except Exception as e:
+            logger.warning(f"Cross-Lingual query translation failed: {e}")
+
+        return None
+
     def _extract_citations(self, retrieved_chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Standardize citations from ChromaDB retrieval results."""
+        """Standardize citations from ChromaDB retrieval results with rerank score."""
         citations: List[Dict[str, Any]] = []
         for c in retrieved_chunks:
             meta = c.get("metadata", {})
@@ -295,12 +399,14 @@ class RAGEngine:
             snippet = text[:200] + "..." if len(text) > 200 else text
 
             loc_label = meta.get("location_label") or f"Trang {meta.get('page_number', 'N/A')}"
+            score = c.get("rerank_score") if c.get("rerank_score") is not None else meta.get("rerank_score")
             citations.append({
                 "chunk_id": c.get("chunk_id"),
                 "file_name": meta.get("file_name", "Unknown"),
                 "page_number": meta.get("page_number", "N/A"),
                 "location_label": loc_label,
                 "distance": c.get("distance"),
+                "rerank_score": score,
                 "snippet": snippet
             })
         return citations
@@ -308,22 +414,13 @@ class RAGEngine:
     def _is_greeting_or_meta(self, question: str) -> bool:
         """Check if the question is a greeting, conversational turn, or introduction query."""
         import re
-        q = question.strip().lower()
-        q_clean = re.sub(r"[^\w\s]", "", q).strip()
-        
-        greetings = {
-            "hi", "hello", "xin chao", "xin chào", "chào", "chao", "chào bạn", "chao ban",
-            "chao bot", "chào bot", "hey", "alô", "alo", "bạn là ai", "ban la ai", "who are you",
-            "bạn có thể làm gì", "ban co the lam gi", "hướng dẫn", "huong dan", "help",
-            "giới thiệu", "gioi thieu", "hedgedoc là gì", "hedgedoc la gi"
-        }
-        if q_clean in greetings:
+        q_clean = re.sub(r"[^\w\s]", "", question.strip().lower()).strip()
+        if q_clean in GREETING_KEYWORDS:
             return True
 
         tokens = q_clean.split()
-        if len(tokens) <= 3 and any(q_clean.startswith(g) for g in ["hi", "hello", "xin chào", "chào bạn", "chào", "chao"]):
-            content_keywords = ["tóm tắt", "tom tat", "tài liệu", "tai lieu", "trang", "sách", "sach", "nội dung", "noi dung", "tìm", "tim"]
-            if not any(k in q_clean for k in content_keywords):
+        if len(tokens) <= 3 and any(q_clean.startswith(g) for g in GREETING_PREFIXES):
+            if not any(k in q_clean for k in CONTENT_TRIGGER_KEYWORDS):
                 return True
 
         return False
@@ -373,12 +470,6 @@ class RAGEngine:
     def _detect_doc_filter(self, question: str) -> Optional[str]:
         """Detect if the query explicitly targets a specific indexed document."""
         import re
-        import unicodedata
-
-        def remove_accents(input_str: str) -> str:
-            nfkd_form = unicodedata.normalize('NFKD', input_str)
-            return "".join([c for c in nfkd_form if not unicodedata.combining(c)])
-
         q_clean = re.sub(r"[^\w\s]", " ", remove_accents(question.lower())).strip()
         docs = self.vector_store.get_indexed_documents_summary()
 
@@ -402,24 +493,9 @@ class RAGEngine:
         """
         Detect if the user inquiry requires broad multi-document synthesis or comparison across all indexed documents.
         """
-        import unicodedata
         import re
-
-        def remove_accents(input_str: str) -> str:
-            nfkd_form = unicodedata.normalize('NFKD', input_str)
-            return "".join([c for c in nfkd_form if not unicodedata.combining(c)])
-
         q = re.sub(r"[^\w\s]", " ", remove_accents(question.lower())).strip()
-
-        cross_patterns = [
-            "so sanh", "khac biet", "cac tai lieu", "tat ca tai lieu", "tat ca cac",
-            "toan bo tai lieu", "toan bo cac", "kho tai lieu", "tong quan cac", "diem giong",
-            "diem khac", "nhung tai lieu", "moi tai lieu", "cac file", "giua cac",
-            "co nhung tai lieu nao", "danh sach tai lieu", "tong hop cac", "chu de cot loi",
-            "all documents", "compare documents", "across documents", "every document", "each document"
-        ]
-
-        return any(p in q for p in cross_patterns)
+        return any(p in q for p in CROSS_DOCUMENT_PATTERNS)
 
     def get_llm(
         self,
@@ -490,55 +566,81 @@ class RAGEngine:
                     "thinking_steps": thinking_steps
                 }
 
-        # Step 1: Generate vector embedding for the query
+        # Step 1: Query analysis & Cross-Lingual translation if query is Vietnamese
+        translated_query = self._translate_or_expand_query(question, active_llm)
         query_vector = self.embedding.embed_text(question)
 
-        # Step 2: Retrieve similar chunks from Vector Store (with auto doc detection & cross-doc diversity)
+        # Step 2: Broad Stage 1 Retrieval (Candidate Pool)
         all_indexed_docs = self.vector_store.get_indexed_documents_summary()
         effective_filter = doc_id_filter or self._detect_doc_filter(question)
         k = top_k or config.TOP_K_RETRIEVAL
         is_cross_doc = not effective_filter and self._is_cross_document_query(question)
+        coarse_k = max(k * 2, 10)
 
+        candidates: List[Dict[str, Any]] = []
         if is_cross_doc and len(all_indexed_docs) > 1:
-            retrieved_chunks = []
-            per_doc_k = max(2, (k + len(all_indexed_docs) - 1) // len(all_indexed_docs))
+            per_doc_k = max(2, (coarse_k + len(all_indexed_docs) - 1) // len(all_indexed_docs))
             for d in all_indexed_docs:
                 doc_chunks = self.vector_store.query(
                     query_embedding=query_vector,
                     top_k=per_doc_k,
                     doc_id_filter=d["doc_id"]
                 )
-                retrieved_chunks.extend(doc_chunks)
+                candidates.extend(doc_chunks)
         else:
-            retrieved_chunks = self.vector_store.query(
+            candidates = self.vector_store.query(
                 query_embedding=query_vector,
-                top_k=k,
+                top_k=coarse_k,
                 doc_id_filter=effective_filter
             )
+
+        # If Cross-Lingual translated query is available, retrieve candidate pool with translated query as well
+        if translated_query:
+            try:
+                en_query_vector = self.embedding.embed_text(translated_query)
+                en_candidates = self.vector_store.query(
+                    query_embedding=en_query_vector,
+                    top_k=coarse_k,
+                    doc_id_filter=effective_filter
+                )
+                candidates.extend(en_candidates)
+            except Exception as e:
+                logger.warning(f"Cross-Lingual candidate retrieval failed: {e}")
+
+        # Step 3: Stage 2 Fine Reranking
+        retrieved_chunks = self.reranker.rerank(
+            query=question,
+            candidates=candidates,
+            top_k=k,
+            secondary_query=translated_query
+        )
 
         # Extract citation metadata
         citations = self._extract_citations(retrieved_chunks)
 
-        # Build thinking steps
+        # Build thinking steps with reranking & cross-lingual metadata
         scope_label = "All documents" if not doc_id_filter else f"Document ID: {doc_id_filter}"
         unique_files = list(set(c.get("file_name") for c in citations if c.get("file_name")))
         pages_covered = sorted(list(set(str(c.get("page_number")) for c in citations if c.get("page_number") is not None)))
         pages_text = f"Pages {', '.join(pages_covered)}" if pages_covered else "Unknown pages"
-        min_dist = min([c["distance"] for c in citations if c.get("distance") is not None], default=None)
-        dist_info = f" (Distance: {min_dist:.4f})" if min_dist is not None else ""
+        
+        cross_note = f" (Dịch truy vấn: '{translated_query}')" if translated_query else ""
+        rerank_scores = [c.get("rerank_score") for c in citations if c.get("rerank_score") is not None]
+        avg_score = sum(rerank_scores) / len(rerank_scores) if rerank_scores else None
+        score_info = f" [Độ khớp: {avg_score:.2f}]" if avg_score is not None else ""
 
         thinking_steps = [
             {
-                "title": "Query Analysis",
-                "detail": f"Scope: {scope_label}."
+                "title": "Phân Tích Truy Vấn",
+                "detail": f"Phạm vi: {scope_label}{cross_note}."
             },
             {
-                "title": "Data Retrieval",
-                "detail": f"{len(retrieved_chunks)} chunks from {len(unique_files)} document(s) ({pages_text}){dist_info}."
+                "title": "Truy Xuất & Đánh Giá Thứ Hạng (Rerank)",
+                "detail": f"Sàng lọc {len(candidates)} đoạn -> Chọn Top {len(retrieved_chunks)} ({pages_text}){score_info}."
             },
             {
-                "title": "Grounding Check",
-                "detail": "Cross-verifying source text."
+                "title": "Đối Chiếu Nguồn Gốc (Strict Grounding)",
+                "detail": "Tổng hợp ngữ cảnh và trích dẫn số trang chính xác."
             }
         ]
 

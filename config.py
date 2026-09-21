@@ -4,45 +4,51 @@ Loads environment variables from .env and supplies parameters system-wide withou
 """
 
 import os
-from dataclasses import dataclass
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Load configuration from .env file
 BASE_DIR = Path(__file__).resolve().parent
-load_dotenv(BASE_DIR / ".env")
 
 
-@dataclass(frozen=True)
 class AppConfig:
-    """Centralized configuration for HedgeDoc."""
+    """Centralized configuration for HedgeDoc with hot-reload capability."""
 
-    # Project directories
-    BASE_DIR: Path = BASE_DIR
-    DATA_DIR: Path = BASE_DIR / "data"
-    VECTOR_STORE_DIR: Path = BASE_DIR / "data" / "vector_store"
-    RAW_DOCS_DIR: Path = BASE_DIR / "data" / "raw_docs"
+    def __init__(self):
+        # 1. Project directories
+        self.BASE_DIR: Path = BASE_DIR
+        self.DATA_DIR: Path = BASE_DIR / "data"
+        self.VECTOR_STORE_DIR: Path = self.DATA_DIR / "vector_store"
+        self.RAW_DOCS_DIR: Path = self.DATA_DIR / "raw_docs"
 
-    # API Keys
-    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
-    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+        # 2. Load settings from .env
+        self.reload()
+        self.ensure_directories()
 
-    # Provider & Model Settings
-    LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "gemini").lower()
-    LLM_MODEL: str = os.getenv("LLM_MODEL", "gemini-2.5-flash")
-    LLM_TEMPERATURE: float = float(os.getenv("LLM_TEMPERATURE", "0.2"))
-    OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    def reload(self) -> None:
+        """Load or refresh all configuration values directly from .env."""
+        load_dotenv(self.BASE_DIR / ".env", override=True)
 
-    EMBEDDING_PROVIDER: str = os.getenv("EMBEDDING_PROVIDER", "gemini").lower()
-    EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "models/gemini-embedding-2")
+        # API Keys
+        self.GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+        self.OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
 
-    # Vector DB & Retrieval Settings
-    CHROMA_COLLECTION_NAME: str = os.getenv("CHROMA_COLLECTION_NAME", "hedgedoc_knowledge_base")
-    TOP_K_RETRIEVAL: int = int(os.getenv("TOP_K_RETRIEVAL", "4"))
+        # LLM Provider & Settings
+        self.LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "gemini").lower()
+        self.LLM_MODEL: str = os.getenv("LLM_MODEL", "gemini-2.5-flash")
+        self.LLM_TEMPERATURE: float = float(os.getenv("LLM_TEMPERATURE", "0.2"))
+        self.OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 
-    # Chunking Strategy
-    CHUNK_SIZE: int = int(os.getenv("CHUNK_SIZE", "800"))
-    CHUNK_OVERLAP: int = int(os.getenv("CHUNK_OVERLAP", "150"))
+        # Embedding Provider & Settings
+        self.EMBEDDING_PROVIDER: str = os.getenv("EMBEDDING_PROVIDER", "ollama").lower()
+        self.EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "nomic-embed-text")
+
+        # Vector DB & Retrieval
+        self.CHROMA_COLLECTION_NAME: str = os.getenv("CHROMA_COLLECTION_NAME", "hedgedoc_local_kb")
+        self.TOP_K_RETRIEVAL: int = int(os.getenv("TOP_K_RETRIEVAL", "4"))
+
+        # Chunking Strategy
+        self.CHUNK_SIZE: int = int(os.getenv("CHUNK_SIZE", "800"))
+        self.CHUNK_OVERLAP: int = int(os.getenv("CHUNK_OVERLAP", "150"))
 
     def ensure_directories(self) -> None:
         """Ensure all required application data directories exist."""
@@ -52,4 +58,3 @@ class AppConfig:
 
 
 config = AppConfig()
-config.ensure_directories()
