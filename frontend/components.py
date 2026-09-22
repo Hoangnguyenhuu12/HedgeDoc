@@ -9,6 +9,7 @@ import streamlit as st
 
 __all__ = [
     "inject_custom_css",
+    "inject_seo_meta",
     "render_header",
     "render_claude_thinking_box",
     "render_thought_and_citations",
@@ -21,6 +22,8 @@ __all__ = [
 ]
 
 CSS_PATH = Path(__file__).parent / "styles.css"
+LOGO_SVG_PATH = Path(__file__).parent.parent / "assets" / "logo.svg"
+_LOGO_SVG = LOGO_SVG_PATH.read_text(encoding="utf-8") if LOGO_SVG_PATH.exists() else ""
 
 
 def inject_custom_css() -> None:
@@ -30,14 +33,41 @@ def inject_custom_css() -> None:
         st.markdown(f"<style>\n{css_content}\n</style>", unsafe_allow_html=True)
 
 
+def inject_seo_meta() -> None:
+    """Inject minimalist, refined SEO meta tags and social preview cards."""
+    seo_tags = """
+    <!-- Essential Meta Tags -->
+    <meta name="description" content="Minimalist RAG engine for deep document understanding, precise page-level citations, and zero hallucination.">
+    <meta name="keywords" content="HedgeDoc, RAG, Retrieval-Augmented Generation, Document AI, Vector Search, Minimalist AI">
+    <meta name="author" content="HedgeDoc">
+    <link rel="canonical" href="https://hedgedoc.vercel.app/">
+
+    <!-- Open Graph / Social Sharing -->
+    <meta property="og:title" content="HedgeDoc — Minimalist RAG & Document Intelligence">
+    <meta property="og:description" content="Minimalist RAG engine for deep document understanding, precise page-level citations, and zero hallucination.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://hedgedoc.vercel.app/">
+    <meta property="og:image" content="https://hedgedoc.vercel.app/static/logo.png">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="HedgeDoc — Minimalist RAG & Document Intelligence">
+    <meta name="twitter:description" content="Minimalist RAG engine for deep document understanding, precise page-level citations, and zero hallucination.">
+    <meta name="twitter:image" content="https://hedgedoc.vercel.app/static/logo.png">
+    """
+    st.markdown(seo_tags, unsafe_allow_html=True)
+
 
 def render_header(scope_label: str = "All documents") -> None:
-    """Render minimal header."""
+    """Render minimal header with hedgehog-book logo and semantic H1 for SEO."""
     st.markdown(
-        """
+        f"""
         <div class="app-header">
-            <div class="app-title">HedgeDoc</div>
-            <div class="app-subtitle">Document analysis and retrieval system with precise page-level citations.</div>
+            <div class="app-logo">{_LOGO_SVG}</div>
+            <div class="app-header-text">
+                <h1 class="app-title">HedgeDoc</h1>
+                <p class="app-subtitle">Minimalist RAG & Document Intelligence with precise page-level citations.</p>
+            </div>
         </div>
         """,
         unsafe_allow_html=True

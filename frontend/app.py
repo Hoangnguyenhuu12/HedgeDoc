@@ -33,6 +33,7 @@ from backend.rag_engine import RAGEngine, strip_inline_citations
 from backend.memory import ConversationMemoryBuffer
 from frontend.components import (
     inject_custom_css,
+    inject_seo_meta,
     render_header,
     render_claude_thinking_box,
     render_citation_cards,
@@ -44,14 +45,16 @@ from frontend.components import (
     render_model_selector
 )
 
-# Page configuration
+# Page configuration (Minimalist, English, SEO-optimized)
 st.set_page_config(
-    page_title="HedgeDoc",
+    page_title="HedgeDoc — Minimalist RAG & Document Intelligence",
+    page_icon="assets/favicon.png",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 inject_custom_css()
+inject_seo_meta()
 
 # Auto hot-reload .env configuration on each session cycle
 config.reload()

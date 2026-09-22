@@ -7,6 +7,10 @@ import sys
 import io
 from pathlib import Path
 
+BASE_DIR = Path(__file__).resolve().parent.parent
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
+
 if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
     try:
         sys.stdout.reconfigure(encoding='utf-8')
@@ -141,4 +145,4 @@ def test_backend_suite():
 
 
 if __name__ == "__main__":
-    run_backend_tests()
+    test_backend_suite()
