@@ -1,11 +1,11 @@
 """
 Script to generate minimalist Hedgehog & Book Pages logo and favicons for HedgeDoc.
-Updated refined design:
-- Delicate, thin strokes (3.8px) for an elegant minimalist look (no bulkiness).
-- All 11 spines are thin, evenly spaced, and directed towards the exact same sharp pivot vertex.
-- Sleek, compact triangular head on the left with a straight forehead.
-- Uniform spacing between the head and all subsequent quills.
-- 100% seamless alignment at pivot and baseline.
+Complete Redesign according to exact specifications:
+- Exactly 13 edges/rays converging at 1 single point at the bottom-left.
+- Angles between all edges are divided completely evenly (equal angular spacing).
+- Sector 0 forms the sleek, refined hedgehog head (no awkward extra corners, no bulky thickness).
+- All 13 edges are rendered in black with clean, delicate 3.6px strokes and rounded linecaps.
+- 100% mathematical precision and seamless integration.
 """
 
 from pathlib import Path
@@ -13,39 +13,43 @@ import math
 from PIL import Image, ImageDraw
 
 def create_svg(size=512, color="#18181B"):
-    cx = 215
-    cy = 345
-    r_outer = 195
-    stroke_w = 3.8
+    # Single convergence point at the bottom-left
+    ox = 185
+    oy = 345
+    r_outer = 210
+    stroke_w = 3.6
     
-    start_ang = 60.0
+    num_edges = 13
+    start_ang = 62.0
     end_ang = 0.0
-    num_spines = 11
-    delta_ang = (start_ang - end_ang) / (num_spines - 1)
+    delta_ang = (start_ang - end_ang) / (num_edges - 1)
     
-    # Sleek, compact head triangle on the left
-    nose_x = cx - 72
-    tri_ang = start_ang + delta_ang * 0.85
-    rad_tri = math.radians(tri_ang)
-    r_tri = 0.42 * r_outer
-    peak_x = cx + r_tri * math.cos(rad_tri)
-    peak_y = cy - r_tri * math.sin(rad_tri)
-    
+    # Calculate all 13 outer points
+    pts = []
+    for i in range(num_edges):
+        ang = start_ang - i * delta_ang
+        rad = math.radians(ang)
+        frac = i / (num_edges - 1)
+        curr_r = r_outer * (1.0 + 0.02 * math.sin(frac * math.pi))
+        x2 = ox + curr_r * math.cos(rad)
+        y2 = oy - curr_r * math.sin(rad)
+        pts.append((x2, y2))
+        
     svg = []
     svg.append(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="{size}" height="{size}">')
     svg.append('  <!-- Background: transparent -->')
     
-    # Head triangle
-    svg.append(f'  <polygon points="{nose_x},{cy} {peak_x:.1f},{peak_y:.1f} {cx},{cy}" fill="{color}" stroke="{color}" stroke-width="{stroke_w}" stroke-linejoin="round" stroke-linecap="round" />')
+    # Sleek hedgehog head formed by Sector 0 (between Edge 0 and Edge 1)
+    p0x, p0y = pts[0]
+    p1x, p1y = pts[1]
+    svg.append(f'  <!-- Refined Hedgehog Head: Sector 0 -->')
+    svg.append(f'  <polygon points="{ox},{oy} {p0x:.1f},{p0y:.1f} {p1x:.1f},{p1y:.1f}" fill="{color}" />')
     
-    # 11 thin, evenly spaced spines radiating directly from pivot (cx, cy)
-    for i in range(num_spines):
-        ang = start_ang - i * delta_ang
-        rad = math.radians(ang)
-        curr_r = r_outer * (1.0 + 0.02 * math.sin((i / (num_spines - 1)) * math.pi))
-        x2 = cx + curr_r * math.cos(rad)
-        y2 = cy - curr_r * math.sin(rad)
-        svg.append(f'  <line x1="{cx}" y1="{cy}" x2="{x2:.1f}" y2="{y2:.1f}" stroke="{color}" stroke-width="{stroke_w}" stroke-linecap="round" />')
+    # All 13 evenly spaced black edges radiating from the bottom-left point
+    svg.append(f'  <!-- 13 Black Edges Converging at Bottom-Left ({ox}, {oy}) -->')
+    for i in range(num_edges):
+        x2, y2 = pts[i]
+        svg.append(f'  <line x1="{ox}" y1="{oy}" x2="{x2:.1f}" y2="{y2:.1f}" stroke="{color}" stroke-width="{stroke_w}" stroke-linecap="round" />')
         
     svg.append('</svg>')
     return '\n'.join(svg)
@@ -57,42 +61,37 @@ def render_png(size=512, color=(24, 24, 27, 255), bg_color=(255, 255, 255, 0)):
     img = Image.new("RGBA", (img_size, img_size), bg_color)
     draw = ImageDraw.Draw(img)
     
-    cx = 215 * scale
-    cy = 345 * scale
-    r_outer = 195 * scale
-    stroke_w = int(3.8 * scale)
+    ox = 185 * scale
+    oy = 345 * scale
+    r_outer = 210 * scale
+    stroke_w = int(3.6 * scale)
     r_cap = stroke_w / 2.0
     
-    start_ang = 60.0
+    num_edges = 13
+    start_ang = 62.0
     end_ang = 0.0
-    num_spines = 11
-    delta_ang = (start_ang - end_ang) / (num_spines - 1)
+    delta_ang = (start_ang - end_ang) / (num_edges - 1)
     
-    # 1. 11 thin spines radiating from pivot (cx, cy)
-    for i in range(num_spines):
+    pts = []
+    for i in range(num_edges):
         ang = start_ang - i * delta_ang
         rad = math.radians(ang)
-        curr_r = r_outer * (1.0 + 0.02 * math.sin((i / (num_spines - 1)) * math.pi))
-        x2 = cx + curr_r * math.cos(rad)
-        y2 = cy - curr_r * math.sin(rad)
-        draw.line([(cx, cy), (x2, y2)], fill=color, width=stroke_w)
+        frac = i / (num_edges - 1)
+        curr_r = r_outer * (1.0 + 0.02 * math.sin(frac * math.pi))
+        x2 = ox + curr_r * math.cos(rad)
+        y2 = oy - curr_r * math.sin(rad)
+        pts.append((x2, y2))
+        
+    # 1. Fill Sector 0 as the sleek hedgehog head
+    draw.polygon([(ox, oy), pts[0], pts[1]], fill=color)
+    
+    # 2. Draw all 13 black edges radiating from (ox, oy)
+    for i in range(num_edges):
+        x2, y2 = pts[i]
+        draw.line([(ox, oy), (x2, y2)], fill=color, width=stroke_w)
         draw.ellipse([x2 - r_cap, y2 - r_cap, x2 + r_cap, y2 + r_cap], fill=color)
         
-    # 2. Sleek compact head triangle
-    nose_x = cx - 72 * scale
-    tri_ang = start_ang + delta_ang * 0.85
-    rad_tri = math.radians(tri_ang)
-    r_tri = 0.42 * r_outer
-    peak_x = cx + r_tri * math.cos(rad_tri)
-    peak_y = cy - r_tri * math.sin(rad_tri)
-    
-    draw.polygon([(nose_x, cy), (peak_x, peak_y), (cx, cy)], fill=color)
-    draw.line([(nose_x, cy), (cx, cy)], fill=color, width=stroke_w)
-    draw.line([(nose_x, cy), (peak_x, peak_y)], fill=color, width=stroke_w)
-    draw.line([(peak_x, peak_y), (cx, cy)], fill=color, width=stroke_w)
-    draw.ellipse([nose_x - r_cap, cy - r_cap, nose_x + r_cap, cy + r_cap], fill=color)
-    draw.ellipse([peak_x - r_cap, peak_y - r_cap, peak_x + r_cap, peak_y + r_cap], fill=color)
-    draw.ellipse([cx - r_cap, cy - r_cap, cx + r_cap, cy + r_cap], fill=color)
+    draw.ellipse([ox - r_cap, oy - r_cap, ox + r_cap, oy + r_cap], fill=color)
     
     final_img = img.resize((size, size), Image.Resampling.LANCZOS)
     return final_img
