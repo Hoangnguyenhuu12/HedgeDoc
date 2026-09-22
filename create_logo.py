@@ -1,11 +1,10 @@
 """
 Script to generate minimalist Hedgehog & Book Pages logo and favicons for HedgeDoc.
-Architecture:
-- 100% Seamless single-body geometry.
-- Single continuous triangle for head and body.
-- Uniform baseline matching spine stroke width (no steps, no gaps).
-- Spines radiate directly from pivot (cx, cy) to outer radius in an elegant fan.
-- Matching rounded stroke caps for all endpoints.
+Updated refined design:
+- Sleek, slender triangle profile (no bulkiness).
+- 100% straight top edge from nose tip to the outer apex (no bend/kink/curve).
+- Spines fan smoothly from apex down to horizontal baseline.
+- 100% seamless integration at pivot and baseline.
 """
 
 from pathlib import Path
@@ -13,30 +12,30 @@ import math
 from PIL import Image, ImageDraw
 
 def create_svg(size=512, color="#18181B"):
-    cx = 220
-    cy = 340
+    cx = 205
+    cy = 345
     r_outer = 190
-    nose_x = 115
+    nose_offset = 82
+    nose_x = cx - nose_offset
     
-    start_angle = 63.0
+    start_angle = 62.0
     end_angle = 0.0
     num_spines = 11
-    stroke_w = 8.5
+    stroke_w = 8.0
     
-    # Peak at 48% of r_outer along the top spine
-    r_peak = r_outer * 0.48
+    # Apex of the first spine and top vertex of the triangle
     rad_start = math.radians(start_angle)
-    peak_x = cx + r_peak * math.cos(rad_start)
-    peak_y = cy - r_peak * math.sin(rad_start)
+    top_x = cx + r_outer * math.cos(rad_start)
+    top_y = cy - r_outer * math.sin(rad_start)
     
     svg = []
     svg.append(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="{size}" height="{size}">')
     svg.append('  <!-- Background: transparent -->')
     
-    # Unified head polygon with stroke for perfect baseline alignment and rounded corners
-    svg.append(f'  <polygon points="{nose_x},{cy} {peak_x:.1f},{peak_y:.1f} {cx},{cy}" fill="{color}" stroke="{color}" stroke-width="{stroke_w}" stroke-linejoin="round" stroke-linecap="round" />')
+    # Slender triangle with perfectly straight top edge
+    svg.append(f'  <polygon points="{nose_x},{cy} {top_x:.1f},{top_y:.1f} {cx},{cy}" fill="{color}" stroke="{color}" stroke-width="{stroke_w}" stroke-linejoin="round" stroke-linecap="round" />')
     
-    # Spines radiating directly from pivot (cx, cy) - ZERO GAP
+    # Spines radiating directly from pivot (cx, cy)
     for i in range(num_spines):
         frac = i / (num_spines - 1)
         ang = start_angle - frac * (start_angle - end_angle)
@@ -56,34 +55,32 @@ def render_png(size=512, color=(24, 24, 27, 255), bg_color=(255, 255, 255, 0)):
     img = Image.new("RGBA", (img_size, img_size), bg_color)
     draw = ImageDraw.Draw(img)
     
-    cx = 220 * scale
-    cy = 340 * scale
+    cx = 205 * scale
+    cy = 345 * scale
     r_outer = 190 * scale
-    nose_x = 115 * scale
+    nose_offset = 82 * scale
+    nose_x = cx - nose_offset
     
-    start_angle = 63.0
+    start_angle = 62.0
     end_angle = 0.0
     num_spines = 11
-    stroke_w = int(8.5 * scale)
+    stroke_w = int(8.0 * scale)
     r_cap = stroke_w / 2.0
     
-    r_peak = r_outer * 0.48
     rad_start = math.radians(start_angle)
-    peak_x = cx + r_peak * math.cos(rad_start)
-    peak_y = cy - r_peak * math.sin(rad_start)
+    top_x = cx + r_outer * math.cos(rad_start)
+    top_y = cy - r_outer * math.sin(rad_start)
     
     # 1. Fill polygon
-    draw.polygon([(nose_x, cy), (peak_x, peak_y), (cx, cy)], fill=color)
+    draw.polygon([(nose_x, cy), (top_x, top_y), (cx, cy)], fill=color)
     
-    # 2. Stroke outline with matching thickness for uniform baseline
+    # 2. Outline with matching stroke width
     draw.line([(nose_x, cy), (cx, cy)], fill=color, width=stroke_w)
-    draw.line([(nose_x, cy), (peak_x, peak_y)], fill=color, width=stroke_w)
-    draw.line([(peak_x, peak_y), (cx, cy)], fill=color, width=stroke_w)
+    draw.line([(nose_x, cy), (top_x, top_y)], fill=color, width=stroke_w)
     draw.ellipse([nose_x - r_cap, cy - r_cap, nose_x + r_cap, cy + r_cap], fill=color)
-    draw.ellipse([peak_x - r_cap, peak_y - r_cap, peak_x + r_cap, peak_y + r_cap], fill=color)
-    draw.ellipse([cx - r_cap, cy - r_cap, cx + r_cap, cy + r_cap], fill=color)
+    draw.ellipse([top_x - r_cap, top_y - r_cap, top_x + r_cap, top_y + r_cap], fill=color)
     
-    # 3. Spines fanning from (cx, cy)
+    # 3. Spines radiating from (cx, cy)
     for i in range(num_spines):
         frac = i / (num_spines - 1)
         ang = start_angle - frac * (start_angle - end_angle)
