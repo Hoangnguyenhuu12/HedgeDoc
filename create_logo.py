@@ -1,9 +1,11 @@
 """
 Script to generate minimalist Hedgehog & Book Pages logo and favicons for HedgeDoc.
-Updated architecture:
-- Exactly ONE single triangle for the hedgehog's head/body (no double triangles).
-- The triangle's tip extends forward to form the snout on the baseline.
-- The spines/book pages fan out from the rear pivot in a clean circular arc.
+Architecture:
+- 100% Seamless single-body geometry.
+- Single continuous triangle for head and body.
+- Uniform baseline matching spine stroke width (no steps, no gaps).
+- Spines radiate directly from pivot (cx, cy) to outer radius in an elegant fan.
+- Matching rounded stroke caps for all endpoints.
 """
 
 from pathlib import Path
@@ -11,102 +13,87 @@ import math
 from PIL import Image, ImageDraw
 
 def create_svg(size=512, color="#18181B"):
-    # Center / pivot coordinates
-    cx = 225
+    cx = 220
     cy = 340
-    snout_tip_x = 110
-    snout_tip_y = cy
-    
-    start_angle_deg = 67.0
-    end_angle_deg = 0.0
-    
-    # Head peak along the top spine
-    r_head = 78
-    rad_peak = math.radians(start_angle_deg)
-    head_peak_x = cx + r_head * math.cos(rad_peak)
-    head_peak_y = cy - r_head * math.sin(rad_peak)
-    
     r_outer = 190
-    r_inner = 30
+    nose_x = 115
+    
+    start_angle = 63.0
+    end_angle = 0.0
     num_spines = 11
-    stroke_width = 8.5
+    stroke_w = 8.5
     
-    svg_lines = []
-    svg_lines.append(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="{size}" height="{size}">')
-    svg_lines.append('  <!-- Background: transparent -->')
+    # Peak at 48% of r_outer along the top spine
+    r_peak = r_outer * 0.48
+    rad_start = math.radians(start_angle)
+    peak_x = cx + r_peak * math.cos(rad_start)
+    peak_y = cy - r_peak * math.sin(rad_start)
     
-    # Exactly ONE single head/body triangle
-    # Points: Snout tip (110, 340) -> Head peak -> Pivot (225, 340)
-    snout_pts = f"{snout_tip_x},{snout_tip_y} {head_peak_x:.1f},{head_peak_y:.1f} {cx},{cy}"
-    svg_lines.append(f'  <polygon points="{snout_pts}" fill="{color}" />')
+    svg = []
+    svg.append(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="{size}" height="{size}">')
+    svg.append('  <!-- Background: transparent -->')
     
-    # Spines (rays / book pages)
+    # Unified head polygon with stroke for perfect baseline alignment and rounded corners
+    svg.append(f'  <polygon points="{nose_x},{cy} {peak_x:.1f},{peak_y:.1f} {cx},{cy}" fill="{color}" stroke="{color}" stroke-width="{stroke_w}" stroke-linejoin="round" stroke-linecap="round" />')
+    
+    # Spines radiating directly from pivot (cx, cy) - ZERO GAP
     for i in range(num_spines):
         frac = i / (num_spines - 1)
-        angle_deg = start_angle_deg - frac * (start_angle_deg - end_angle_deg)
-        rad = math.radians(angle_deg)
+        ang = start_angle - frac * (start_angle - end_angle)
+        rad = math.radians(ang)
+        curr_r = r_outer * (1.0 + 0.03 * math.sin(frac * math.pi))
+        x2 = cx + curr_r * math.cos(rad)
+        y2 = cy - curr_r * math.sin(rad)
+        svg.append(f'  <line x1="{cx}" y1="{cy}" x2="{x2:.1f}" y2="{y2:.1f}" stroke="{color}" stroke-width="{stroke_w}" stroke-linecap="round" />')
         
-        curr_r_outer = r_outer * (1.0 + 0.03 * math.sin(frac * math.pi))
-        
-        # Start spine at r_inner (or at r_head for the top spine)
-        eff_r_inner = r_head if i == 0 else r_inner
-        x1 = cx + eff_r_inner * math.cos(rad)
-        y1 = cy - eff_r_inner * math.sin(rad)
-        x2 = cx + curr_r_outer * math.cos(rad)
-        y2 = cy - curr_r_outer * math.sin(rad)
-        
-        svg_lines.append(f'  <line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" stroke="{color}" stroke-width="{stroke_width}" stroke-linecap="round" />')
-        
-    svg_lines.append('</svg>')
-    return "\n".join(svg_lines)
+    svg.append('</svg>')
+    return '\n'.join(svg)
 
 
 def render_png(size=512, color=(24, 24, 27, 255), bg_color=(255, 255, 255, 0)):
-    # Render with 4x supersampling for ultra smooth antialiasing
     scale = 4
     img_size = size * scale
     img = Image.new("RGBA", (img_size, img_size), bg_color)
     draw = ImageDraw.Draw(img)
     
-    cx = 225 * scale
+    cx = 220 * scale
     cy = 340 * scale
-    snout_tip_x = 110 * scale
-    snout_tip_y = cy
+    r_outer = 190 * scale
+    nose_x = 115 * scale
     
-    start_angle_deg = 67.0
-    end_angle_deg = 0.0
-    
-    r_head = 78 * scale
-    rad_peak = math.radians(start_angle_deg)
-    head_peak_x = cx + r_head * math.cos(rad_peak)
-    head_peak_y = cy - r_head * math.sin(rad_peak)
-    
-    # Single triangle
-    draw.polygon([(snout_tip_x, snout_tip_y), (head_peak_x, head_peak_y), (cx, cy)], fill=color)
-    
-    # Spines
+    start_angle = 63.0
+    end_angle = 0.0
     num_spines = 11
     stroke_w = int(8.5 * scale)
-    r_outer = 190 * scale
-    r_inner = 30 * scale
+    r_cap = stroke_w / 2.0
     
+    r_peak = r_outer * 0.48
+    rad_start = math.radians(start_angle)
+    peak_x = cx + r_peak * math.cos(rad_start)
+    peak_y = cy - r_peak * math.sin(rad_start)
+    
+    # 1. Fill polygon
+    draw.polygon([(nose_x, cy), (peak_x, peak_y), (cx, cy)], fill=color)
+    
+    # 2. Stroke outline with matching thickness for uniform baseline
+    draw.line([(nose_x, cy), (cx, cy)], fill=color, width=stroke_w)
+    draw.line([(nose_x, cy), (peak_x, peak_y)], fill=color, width=stroke_w)
+    draw.line([(peak_x, peak_y), (cx, cy)], fill=color, width=stroke_w)
+    draw.ellipse([nose_x - r_cap, cy - r_cap, nose_x + r_cap, cy + r_cap], fill=color)
+    draw.ellipse([peak_x - r_cap, peak_y - r_cap, peak_x + r_cap, peak_y + r_cap], fill=color)
+    draw.ellipse([cx - r_cap, cy - r_cap, cx + r_cap, cy + r_cap], fill=color)
+    
+    # 3. Spines fanning from (cx, cy)
     for i in range(num_spines):
         frac = i / (num_spines - 1)
-        angle_deg = start_angle_deg - frac * (start_angle_deg - end_angle_deg)
-        rad = math.radians(angle_deg)
+        ang = start_angle - frac * (start_angle - end_angle)
+        rad = math.radians(ang)
+        curr_r = r_outer * (1.0 + 0.03 * math.sin(frac * math.pi))
+        x2 = cx + curr_r * math.cos(rad)
+        y2 = cy - curr_r * math.sin(rad)
         
-        curr_r_outer = r_outer * (1.0 + 0.03 * math.sin(frac * math.pi))
-        eff_r_inner = r_head if i == 0 else r_inner
-        
-        x1 = cx + eff_r_inner * math.cos(rad)
-        y1 = cy - eff_r_inner * math.sin(rad)
-        x2 = cx + curr_r_outer * math.cos(rad)
-        y2 = cy - curr_r_outer * math.sin(rad)
-        
-        draw.line([(x1, y1), (x2, y2)], fill=color, width=stroke_w)
-        r_cap = stroke_w / 2.0
+        draw.line([(cx, cy), (x2, y2)], fill=color, width=stroke_w)
         draw.ellipse([x2 - r_cap, y2 - r_cap, x2 + r_cap, y2 + r_cap], fill=color)
-        draw.ellipse([x1 - r_cap, y1 - r_cap, x1 + r_cap, y1 + r_cap], fill=color)
         
     final_img = img.resize((size, size), Image.Resampling.LANCZOS)
     return final_img
@@ -118,7 +105,7 @@ if __name__ == "__main__":
     static_dir = Path("static")
     static_dir.mkdir(exist_ok=True)
     
-    # 1. Save SVG to assets and static
+    # 1. Save SVG
     svg_content = create_svg()
     (assets_dir / "logo.svg").write_text(svg_content, encoding="utf-8")
     (static_dir / "logo.svg").write_text(svg_content, encoding="utf-8")
