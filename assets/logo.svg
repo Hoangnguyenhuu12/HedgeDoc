@@ -1,15 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <!-- Background: transparent -->
-  <polygon points="123,345 294.2,177.2 205,345" fill="#18181B" stroke="#18181B" stroke-width="8.0" stroke-linejoin="round" stroke-linecap="round" />
-  <line x1="205" y1="345" x2="294.2" y2="177.2" stroke="#18181B" stroke-width="8.0" stroke-linecap="round" />
-  <line x1="205" y1="345" x2="312.8" y2="186.4" stroke="#18181B" stroke-width="8.0" stroke-linecap="round" />
-  <line x1="205" y1="345" x2="330.3" y2="197.8" stroke="#18181B" stroke-width="8.0" stroke-linecap="round" />
-  <line x1="205" y1="345" x2="346.4" y2="211.3" stroke="#18181B" stroke-width="8.0" stroke-linecap="round" />
-  <line x1="205" y1="345" x2="360.7" y2="226.8" stroke="#18181B" stroke-width="8.0" stroke-linecap="round" />
-  <line x1="205" y1="345" x2="372.7" y2="244.2" stroke="#18181B" stroke-width="8.0" stroke-linecap="round" />
-  <line x1="205" y1="345" x2="382.4" y2="263.0" stroke="#18181B" stroke-width="8.0" stroke-linecap="round" />
-  <line x1="205" y1="345" x2="389.4" y2="282.9" stroke="#18181B" stroke-width="8.0" stroke-linecap="round" />
-  <line x1="205" y1="345" x2="393.8" y2="303.5" stroke="#18181B" stroke-width="8.0" stroke-linecap="round" />
-  <line x1="205" y1="345" x2="395.6" y2="324.3" stroke="#18181B" stroke-width="8.0" stroke-linecap="round" />
-  <line x1="205" y1="345" x2="395.0" y2="345.0" stroke="#18181B" stroke-width="8.0" stroke-linecap="round" />
+  <polygon points="143,345 249.5,270.7 215,345" fill="#18181B" stroke="#18181B" stroke-width="3.8" stroke-linejoin="round" stroke-linecap="round" />
+  <line x1="215" y1="345" x2="312.5" y2="176.1" stroke="#18181B" stroke-width="3.8" stroke-linecap="round" />
+  <line x1="215" y1="345" x2="330.3" y2="186.3" stroke="#18181B" stroke-width="3.8" stroke-linecap="round" />
+  <line x1="215" y1="345" x2="347.0" y2="198.4" stroke="#18181B" stroke-width="3.8" stroke-linecap="round" />
+  <line x1="215" y1="345" x2="362.3" y2="212.4" stroke="#18181B" stroke-width="3.8" stroke-linecap="round" />
+  <line x1="215" y1="345" x2="375.8" y2="228.2" stroke="#18181B" stroke-width="3.8" stroke-linecap="round" />
+  <line x1="215" y1="345" x2="387.3" y2="245.6" stroke="#18181B" stroke-width="3.8" stroke-linecap="round" />
+  <line x1="215" y1="345" x2="396.5" y2="264.2" stroke="#18181B" stroke-width="3.8" stroke-linecap="round" />
+  <line x1="215" y1="345" x2="403.5" y2="283.8" stroke="#18181B" stroke-width="3.8" stroke-linecap="round" />
+  <line x1="215" y1="345" x2="408.0" y2="304.0" stroke="#18181B" stroke-width="3.8" stroke-linecap="round" />
+  <line x1="215" y1="345" x2="410.1" y2="324.5" stroke="#18181B" stroke-width="3.8" stroke-linecap="round" />
+  <line x1="215" y1="345" x2="410.0" y2="345.0" stroke="#18181B" stroke-width="3.8" stroke-linecap="round" />
 </svg>

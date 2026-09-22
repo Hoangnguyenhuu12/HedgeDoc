@@ -1,10 +1,11 @@
 """
 Script to generate minimalist Hedgehog & Book Pages logo and favicons for HedgeDoc.
 Updated refined design:
-- Sleek, slender triangle profile (no bulkiness).
-- 100% straight top edge from nose tip to the outer apex (no bend/kink/curve).
-- Spines fan smoothly from apex down to horizontal baseline.
-- 100% seamless integration at pivot and baseline.
+- Delicate, thin strokes (3.8px) for an elegant minimalist look (no bulkiness).
+- All 11 spines are thin, evenly spaced, and directed towards the exact same sharp pivot vertex.
+- Sleek, compact triangular head on the left with a straight forehead.
+- Uniform spacing between the head and all subsequent quills.
+- 100% seamless alignment at pivot and baseline.
 """
 
 from pathlib import Path
@@ -12,35 +13,36 @@ import math
 from PIL import Image, ImageDraw
 
 def create_svg(size=512, color="#18181B"):
-    cx = 205
+    cx = 215
     cy = 345
-    r_outer = 190
-    nose_offset = 82
-    nose_x = cx - nose_offset
+    r_outer = 195
+    stroke_w = 3.8
     
-    start_angle = 62.0
-    end_angle = 0.0
+    start_ang = 60.0
+    end_ang = 0.0
     num_spines = 11
-    stroke_w = 8.0
+    delta_ang = (start_ang - end_ang) / (num_spines - 1)
     
-    # Apex of the first spine and top vertex of the triangle
-    rad_start = math.radians(start_angle)
-    top_x = cx + r_outer * math.cos(rad_start)
-    top_y = cy - r_outer * math.sin(rad_start)
+    # Sleek, compact head triangle on the left
+    nose_x = cx - 72
+    tri_ang = start_ang + delta_ang * 0.85
+    rad_tri = math.radians(tri_ang)
+    r_tri = 0.42 * r_outer
+    peak_x = cx + r_tri * math.cos(rad_tri)
+    peak_y = cy - r_tri * math.sin(rad_tri)
     
     svg = []
     svg.append(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="{size}" height="{size}">')
     svg.append('  <!-- Background: transparent -->')
     
-    # Slender triangle with perfectly straight top edge
-    svg.append(f'  <polygon points="{nose_x},{cy} {top_x:.1f},{top_y:.1f} {cx},{cy}" fill="{color}" stroke="{color}" stroke-width="{stroke_w}" stroke-linejoin="round" stroke-linecap="round" />')
+    # Head triangle
+    svg.append(f'  <polygon points="{nose_x},{cy} {peak_x:.1f},{peak_y:.1f} {cx},{cy}" fill="{color}" stroke="{color}" stroke-width="{stroke_w}" stroke-linejoin="round" stroke-linecap="round" />')
     
-    # Spines radiating directly from pivot (cx, cy)
+    # 11 thin, evenly spaced spines radiating directly from pivot (cx, cy)
     for i in range(num_spines):
-        frac = i / (num_spines - 1)
-        ang = start_angle - frac * (start_angle - end_angle)
+        ang = start_ang - i * delta_ang
         rad = math.radians(ang)
-        curr_r = r_outer * (1.0 + 0.03 * math.sin(frac * math.pi))
+        curr_r = r_outer * (1.0 + 0.02 * math.sin((i / (num_spines - 1)) * math.pi))
         x2 = cx + curr_r * math.cos(rad)
         y2 = cy - curr_r * math.sin(rad)
         svg.append(f'  <line x1="{cx}" y1="{cy}" x2="{x2:.1f}" y2="{y2:.1f}" stroke="{color}" stroke-width="{stroke_w}" stroke-linecap="round" />')
@@ -55,43 +57,43 @@ def render_png(size=512, color=(24, 24, 27, 255), bg_color=(255, 255, 255, 0)):
     img = Image.new("RGBA", (img_size, img_size), bg_color)
     draw = ImageDraw.Draw(img)
     
-    cx = 205 * scale
+    cx = 215 * scale
     cy = 345 * scale
-    r_outer = 190 * scale
-    nose_offset = 82 * scale
-    nose_x = cx - nose_offset
-    
-    start_angle = 62.0
-    end_angle = 0.0
-    num_spines = 11
-    stroke_w = int(8.0 * scale)
+    r_outer = 195 * scale
+    stroke_w = int(3.8 * scale)
     r_cap = stroke_w / 2.0
     
-    rad_start = math.radians(start_angle)
-    top_x = cx + r_outer * math.cos(rad_start)
-    top_y = cy - r_outer * math.sin(rad_start)
+    start_ang = 60.0
+    end_ang = 0.0
+    num_spines = 11
+    delta_ang = (start_ang - end_ang) / (num_spines - 1)
     
-    # 1. Fill polygon
-    draw.polygon([(nose_x, cy), (top_x, top_y), (cx, cy)], fill=color)
-    
-    # 2. Outline with matching stroke width
-    draw.line([(nose_x, cy), (cx, cy)], fill=color, width=stroke_w)
-    draw.line([(nose_x, cy), (top_x, top_y)], fill=color, width=stroke_w)
-    draw.ellipse([nose_x - r_cap, cy - r_cap, nose_x + r_cap, cy + r_cap], fill=color)
-    draw.ellipse([top_x - r_cap, top_y - r_cap, top_x + r_cap, top_y + r_cap], fill=color)
-    
-    # 3. Spines radiating from (cx, cy)
+    # 1. 11 thin spines radiating from pivot (cx, cy)
     for i in range(num_spines):
-        frac = i / (num_spines - 1)
-        ang = start_angle - frac * (start_angle - end_angle)
+        ang = start_ang - i * delta_ang
         rad = math.radians(ang)
-        curr_r = r_outer * (1.0 + 0.03 * math.sin(frac * math.pi))
+        curr_r = r_outer * (1.0 + 0.02 * math.sin((i / (num_spines - 1)) * math.pi))
         x2 = cx + curr_r * math.cos(rad)
         y2 = cy - curr_r * math.sin(rad)
-        
         draw.line([(cx, cy), (x2, y2)], fill=color, width=stroke_w)
         draw.ellipse([x2 - r_cap, y2 - r_cap, x2 + r_cap, y2 + r_cap], fill=color)
         
+    # 2. Sleek compact head triangle
+    nose_x = cx - 72 * scale
+    tri_ang = start_ang + delta_ang * 0.85
+    rad_tri = math.radians(tri_ang)
+    r_tri = 0.42 * r_outer
+    peak_x = cx + r_tri * math.cos(rad_tri)
+    peak_y = cy - r_tri * math.sin(rad_tri)
+    
+    draw.polygon([(nose_x, cy), (peak_x, peak_y), (cx, cy)], fill=color)
+    draw.line([(nose_x, cy), (cx, cy)], fill=color, width=stroke_w)
+    draw.line([(nose_x, cy), (peak_x, peak_y)], fill=color, width=stroke_w)
+    draw.line([(peak_x, peak_y), (cx, cy)], fill=color, width=stroke_w)
+    draw.ellipse([nose_x - r_cap, cy - r_cap, nose_x + r_cap, cy + r_cap], fill=color)
+    draw.ellipse([peak_x - r_cap, peak_y - r_cap, peak_x + r_cap, peak_y + r_cap], fill=color)
+    draw.ellipse([cx - r_cap, cy - r_cap, cx + r_cap, cy + r_cap], fill=color)
+    
     final_img = img.resize((size, size), Image.Resampling.LANCZOS)
     return final_img
 
