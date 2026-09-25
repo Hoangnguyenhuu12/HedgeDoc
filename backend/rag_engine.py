@@ -11,11 +11,12 @@ from config import config
 from data_layer.loader import MultiFormatDocumentLoader, PDFDocumentLoader
 from data_layer.chunker import DocumentChunker
 from data_layer.vector_store import VectorStoreManager
+from data_layer.graph_store import LegalLineageStore
 from .providers.base import BaseLLM, BaseEmbedding
 import unicodedata
 from .providers.factory import ProviderFactory
 from .memory import ConversationMemoryBuffer
-from .prompts import STRICT_RAG_SYSTEM_PROMPT, build_rag_prompt
+from .prompts import STRICT_RAG_SYSTEM_PROMPT, THINKING_RAG_SYSTEM_PROMPT, build_rag_prompt
 from .reranker import HybridReranker
 
 logger = logging.getLogger(__name__)
@@ -167,6 +168,7 @@ class RAGEngine:
             chunk_overlap=config.CHUNK_OVERLAP
         )
         self.reranker = HybridReranker()
+        self.lineage_store = LegalLineageStore()
 
     def index_document(
         self,
@@ -194,6 +196,13 @@ class RAGEngine:
             doc_id = pages[0].doc_id
             file_name = pages[0].file_name
             total_pages = pages[0].total_pages
+
+            # Index legal lineage & regulatory relationships (Principle 9)
+            try:
+                full_text = "\n".join(p.text for p in pages)
+                self.lineage_store.extract_and_index_relations(doc_id, file_name, full_text)
+            except Exception as le:
+                logger.warning(f"Could not index legal relations for {file_name}: {le}")
 
             # Chunk documents with page/section metadata
             chunks = self.chunker.chunk_documents(pages)
@@ -398,7 +407,7 @@ class RAGEngine:
             text = c.get("text", "").strip()
             snippet = text[:200] + "..." if len(text) > 200 else text
 
-            loc_label = meta.get("location_label") or f"Trang {meta.get('page_number', 'N/A')}"
+            loc_label = meta.get("struct_path") or meta.get("location_label") or f"Trang {meta.get('page_number', 'N/A')}"
             score = c.get("rerank_score") if c.get("rerank_score") is not None else meta.get("rerank_score")
             citations.append({
                 "chunk_id": c.get("chunk_id"),
@@ -446,9 +455,12 @@ class RAGEngine:
         is_greeting: bool,
         retrieved_chunks: Optional[List[Dict[str, Any]]] = None,
         citations: Optional[List[Dict[str, Any]]] = None,
-        doc_id_filter: Optional[str] = None
+        doc_id_filter: Optional[str] = None,
+        mode: str = "fast",
+        translated_query: Optional[str] = None,
+        candidate_count: int = 0
     ) -> str:
-        """Construct a minimal 3-bullet thought process."""
+        """Construct thought process tailored for Fast or Thinking mode."""
         if is_greeting:
             return (
                 "- Phân tích: Nhận diện lời chào hỏi.\n"
@@ -460,6 +472,30 @@ class RAGEngine:
         citations = citations or []
         pages = sorted(list(dict.fromkeys([str(c.get("page_number")) for c in citations if c.get("page_number") is not None])))
         pages_str = f"trang {', '.join(pages)}" if pages else "không rõ trang"
+
+        files = sorted(list(dict.fromkeys([str(c.get("file_name")) for c in citations if c.get("file_name")])))
+        files_str = ", ".join(files) if files else "Toàn bộ kho tài liệu"
+
+        rerank_scores = [c.get("rerank_score") for c in citations if c.get("rerank_score") is not None]
+        avg_score = (sum(rerank_scores) / len(rerank_scores) * 100) if rerank_scores else 0
+
+        if mode == "thinking":
+            cross_trans = f"\n   - Mở rộng ngữ nghĩa (Song ngữ): `{translated_query}`" if translated_query else ""
+            return (
+                f"### Chuỗi Suy Luận Chuyên Sâu (Deep Reasoning Trace)\n\n"
+                f"1. **Phân tích mục tiêu & Phân rã câu hỏi**:\n"
+                f"   - Câu hỏi cần giải quyết: *\"{question.strip()}\"*{cross_trans}\n"
+                f"   - Phạm vi tài liệu đối chiếu: {files_str}\n\n"
+                f"2. **Thu thập & Sàng lọc bằng chứng chéo**:\n"
+                f"   - Quét diện rộng: Thu thập {candidate_count} đoạn ứng viên từ Vector & Từ khóa.\n"
+                f"   - Chọn lọc tinh túy: Top {len(retrieved_chunks)} đoạn qua Hybrid Reranking (Độ khớp trung bình: {avg_score:.0f}%).\n"
+                f"   - Vị trí chứng cứ: {pages_str}.\n\n"
+                f"3. **Kiểm chứng tính nhất quán & Bằng chứng**:\n"
+                f"   - Đối chiếu chéo dữ liệu giữa các đoạn trích nhằm phát hiện mâu thuẫn hoặc thông tin bổ sung.\n"
+                f"   - Bảo toàn số liệu bảng biểu tài chính / quy định điều khoản nguyên vẹn.\n\n"
+                f"4. **Tổng hợp giải pháp có cấu trúc**:\n"
+                f"   - Cấu trúc hóa phản hồi: Tóm tắt kết luận trực diện -> Căn cứ chi tiết -> Lưu ý thực thi."
+            )
 
         return (
             f"- Phân tích: Xác định nội dung cần tra cứu.\n"
@@ -519,11 +555,14 @@ class RAGEngine:
         doc_id_filter: Optional[str] = None,
         stream: bool = False,
         llm_provider: Optional[str] = None,
-        llm_model: Optional[str] = None
+        llm_model: Optional[str] = None,
+        mode: str = "fast"
     ) -> Dict[str, Any]:
         """
         Execute the complete RAG lifecycle for an incoming question.
-        Supports dynamic provider and model selection.
+        Supports dynamic provider and model selection, and Dual Inference Modes:
+        - 'fast': Low-latency direct hybrid search & synthesis (SLA < 30s).
+        - 'thinking': Deep reasoning, multi-perspective candidate expansion & structured synthesis (SLA 30s-90s).
         """
         active_llm = self.get_llm(provider=llm_provider, model_name=llm_model)
 
@@ -531,7 +570,7 @@ class RAGEngine:
         if self._is_greeting_or_meta(question):
             docs = self.vector_store.get_indexed_documents_summary()
             greeting_text = self._build_greeting_response()
-            thought_process = self._build_claude_thought_process(question, is_greeting=True)
+            thought_process = self._build_claude_thought_process(question, is_greeting=True, mode=mode)
             
             thinking_steps = [
                 {"title": "Question Analysis", "detail": "Greeting detected."},
@@ -555,7 +594,8 @@ class RAGEngine:
                     "thought_process": thought_process,
                     "citations": [],
                     "retrieved_chunks": [],
-                    "thinking_steps": thinking_steps
+                    "thinking_steps": thinking_steps,
+                    "mode": mode
                 }
             else:
                 return {
@@ -563,7 +603,8 @@ class RAGEngine:
                     "thought_process": thought_process,
                     "citations": [],
                     "retrieved_chunks": [],
-                    "thinking_steps": thinking_steps
+                    "thinking_steps": thinking_steps,
+                    "mode": mode
                 }
 
         # Step 1: Query analysis & Cross-Lingual translation if query is Vietnamese
@@ -575,7 +616,9 @@ class RAGEngine:
         effective_filter = doc_id_filter or self._detect_doc_filter(question)
         k = top_k or config.TOP_K_RETRIEVAL
         is_cross_doc = not effective_filter and self._is_cross_document_query(question)
-        coarse_k = max(k * 2, 10)
+        
+        # In Thinking mode, broaden the coarse candidate retrieval pool to prevent missing subtle clues
+        coarse_k = max(k * 3, 16) if mode == "thinking" else max(k * 2, 10)
 
         candidates: List[Dict[str, Any]] = []
         if is_cross_doc and len(all_indexed_docs) > 1:
@@ -649,20 +692,55 @@ class RAGEngine:
             is_greeting=False,
             retrieved_chunks=retrieved_chunks,
             citations=citations,
-            doc_id_filter=doc_id_filter
+            doc_id_filter=doc_id_filter,
+            mode=mode,
+            translated_query=translated_query,
+            candidate_count=len(candidates)
         )
 
         # Step 3: Fetch recent conversation history
         history_text = self.memory.get_formatted_history()
 
-        # Step 4: Package full prompt context
+        # Step 4: Expand child chunks to complete parent context & deduplicate (Principle 8)
+        expanded_chunks: List[Dict[str, Any]] = []
+        seen_parents: set = set()
+
+        for c in retrieved_chunks:
+            meta = c.get("metadata", {})
+            p_id = meta.get("parent_id")
+            p_text = meta.get("parent_text")
+
+            if p_id and p_text:
+                if p_id in seen_parents:
+                    continue
+                seen_parents.add(p_id)
+                expanded_chunks.append({
+                    "chunk_id": c.get("chunk_id"),
+                    "text": p_text,
+                    "distance": c.get("distance"),
+                    "rerank_score": c.get("rerank_score"),
+                    "metadata": meta
+                })
+            else:
+                expanded_chunks.append(c)
+
         all_doc_names = [d["file_name"] for d in all_indexed_docs] if is_cross_doc else None
         full_prompt = build_rag_prompt(
             query=question,
-            retrieved_chunks=retrieved_chunks,
+            retrieved_chunks=expanded_chunks,
             history_text=history_text,
-            all_doc_names=all_doc_names
+            all_doc_names=all_doc_names,
+            mode=mode
         )
+
+        # Select corresponding system prompt
+        active_system_prompt = THINKING_RAG_SYSTEM_PROMPT if mode == "thinking" else STRICT_RAG_SYSTEM_PROMPT
+
+        # Check for legal validity warnings on cited documents (Principle 9 / [INV-HEDGE-04])
+        cited_files = [c.get("file_name") for c in citations if c.get("file_name")]
+        legal_alert = self.lineage_store.check_validity_alert(cited_files)
+        if legal_alert:
+            thought_process = f"> {legal_alert}\n\n" + thought_process
 
         # Log user query to conversation memory
         self.memory.add_user_message(question)
@@ -671,9 +749,14 @@ class RAGEngine:
         if stream:
             def streaming_wrapper() -> Iterator[str]:
                 collected_chunks: List[str] = []
+                if legal_alert:
+                    alert_banner = f"> {legal_alert}\n\n---\n\n"
+                    collected_chunks.append(alert_banner)
+                    yield alert_banner
+
                 raw_stream = active_llm.stream_generate(
                     prompt=full_prompt,
-                    system_instruction=STRICT_RAG_SYSTEM_PROMPT
+                    system_instruction=active_system_prompt
                 )
                 for token in clean_citation_stream(raw_stream):
                     collected_chunks.append(token)
@@ -692,14 +775,19 @@ class RAGEngine:
                 "retrieved_chunks": retrieved_chunks,
                 "thinking_steps": thinking_steps,
                 "model_name": active_llm.model_name,
-                "provider": llm_provider or config.LLM_PROVIDER
+                "provider": llm_provider or config.LLM_PROVIDER,
+                "mode": mode,
+                "legal_alert": legal_alert
             }
         else:
             raw_answer = active_llm.generate(
                 prompt=full_prompt,
-                system_instruction=STRICT_RAG_SYSTEM_PROMPT
+                system_instruction=active_system_prompt
             )
             answer = strip_inline_citations(raw_answer)
+            if legal_alert:
+                answer = f"> {legal_alert}\n\n---\n\n" + answer
+
             self.memory.add_assistant_message(
                 content=answer,
                 citations=citations
@@ -711,6 +799,8 @@ class RAGEngine:
                 "retrieved_chunks": retrieved_chunks,
                 "thinking_steps": thinking_steps,
                 "model_name": active_llm.model_name,
-                "provider": llm_provider or config.LLM_PROVIDER
+                "provider": llm_provider or config.LLM_PROVIDER,
+                "mode": mode,
+                "legal_alert": legal_alert
             }
 

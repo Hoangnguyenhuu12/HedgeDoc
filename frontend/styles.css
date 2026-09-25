@@ -1,8 +1,15 @@
-/* General typography and spacing */
+/* HedgeDoc Minimalist Dark Theme (Obsidian Zinc) */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 html, body, [class*="css"] {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    color-scheme: dark;
+}
+
+/* Base background enforcement */
+.stApp {
+    background-color: #09090B !important;
+    color: #FAFAFA !important;
 }
 
 /* Header bar */
@@ -12,12 +19,7 @@ html, body, [class*="css"] {
     gap: 1.1rem;
     margin-bottom: 1.5rem;
     padding-bottom: 1rem;
-    border-bottom: 1px solid rgba(128, 128, 128, 0.2);
-}
-.app-logo {
-    width: 48px;
-    height: 48px;
-    flex-shrink: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 .app-header-text {
     flex: 1;
@@ -28,11 +30,12 @@ html, body, [class*="css"] {
     letter-spacing: -0.025em;
     margin: 0;
     line-height: 1.2;
+    color: #FAFAFA;
 }
 .app-subtitle {
     font-size: 0.92rem;
-    color: #64748b;
-    margin-top: 0.2rem;
+    color: #A1A1AA;
+    margin-top: 0.25rem;
     margin-bottom: 0;
 }
 
@@ -40,7 +43,7 @@ html, body, [class*="css"] {
 .citation-container {
     margin-top: 0.8rem;
     padding-top: 0.5rem;
-    border-top: 1px dashed rgba(128, 128, 128, 0.25);
+    border-top: 1px dashed rgba(255, 255, 255, 0.12);
 }
 .citation-badge {
     display: inline-block;
@@ -48,20 +51,20 @@ html, body, [class*="css"] {
     font-size: 0.75rem;
     font-weight: 600;
     border-radius: 4px;
-    background-color: rgba(66, 133, 244, 0.12);
-    color: #1a73e8;
+    background-color: rgba(59, 130, 246, 0.15);
+    color: #60A5FA;
     margin-right: 0.4rem;
     margin-bottom: 0.4rem;
-    border: 1px solid rgba(66, 133, 244, 0.25);
+    border: 1px solid rgba(59, 130, 246, 0.3);
 }
 .citation-snippet {
     font-size: 0.85rem;
     line-height: 1.5;
-    color: #495057;
-    background: rgba(0, 0, 0, 0.02);
+    color: #D4D4D8;
+    background: rgba(255, 255, 255, 0.03);
     padding: 0.6rem 0.8rem;
     border-radius: 6px;
-    border-left: 3px solid #1a73e8;
+    border-left: 3px solid #3B82F6;
     margin-top: 0.3rem;
     font-style: italic;
 }
@@ -91,9 +94,9 @@ div[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] div[data-testi
 }
 .sidebar-doc-card {
     padding: 0 0.65rem;
-    background: rgba(128, 128, 128, 0.05);
+    background: rgba(255, 255, 255, 0.03);
     border-radius: 6px;
-    border: 1px solid rgba(128, 128, 128, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     transition: all 0.15s ease;
     height: 38px;
     min-height: 38px;
@@ -105,8 +108,8 @@ div[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] div[data-testi
     width: 100%;
 }
 .sidebar-doc-card:hover {
-    background: rgba(128, 128, 128, 0.09);
-    border-color: rgba(128, 128, 128, 0.25);
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.18);
 }
 .sidebar-doc-title {
     font-size: 0.82rem;
@@ -117,11 +120,12 @@ div[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] div[data-testi
     overflow: hidden;
     text-overflow: ellipsis;
     width: 100%;
+    color: #E4E4E7;
 }
 
 /* Minimalist remove button in sidebar */
 div[data-testid="stSidebar"] button[kind="tertiary"] {
-    color: #8a8f98 !important;
+    color: #71717A !important;
     background: transparent !important;
     border: none !important;
     padding: 0 !important;
@@ -139,19 +143,24 @@ div[data-testid="stSidebar"] button[kind="tertiary"] {
     margin: 0 !important;
 }
 div[data-testid="stSidebar"] button[kind="tertiary"]:hover {
-    color: #ef4444 !important;
+    color: #EF4444 !important;
     background: rgba(239, 68, 68, 0.12) !important;
 }
 
 /* Confirmation Dialog styling */
+div[role="dialog"] {
+    background-color: #18181B !important;
+    color: #FAFAFA !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
 div[role="dialog"] button[kind="primary"] {
-    background-color: #ef4444 !important;
-    border-color: #ef4444 !important;
-    color: #ffffff !important;
+    background-color: #DC2626 !important;
+    border-color: #DC2626 !important;
+    color: #FFFFFF !important;
 }
 div[role="dialog"] button[kind="primary"]:hover {
-    background-color: #dc2626 !important;
-    border-color: #dc2626 !important;
+    background-color: #B91C1C !important;
+    border-color: #B91C1C !important;
 }
 
 /* Starter Prompt Chips */
@@ -163,7 +172,7 @@ div[role="dialog"] button[kind="primary"]:hover {
     font-size: 0.76rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: #71717a;
+    color: #71717A;
     font-weight: 600;
 }
 div[data-testid="stMainBlockContainer"] div[data-testid="column"] button[kind="secondary"] {
@@ -173,33 +182,33 @@ div[data-testid="stMainBlockContainer"] div[data-testid="column"] button[kind="s
     line-height: 1.4 !important;
     padding: 0.65rem 0.85rem !important;
     border-radius: 6px !important;
-    border: 1px solid rgba(128, 128, 128, 0.15) !important;
-    background: rgba(128, 128, 128, 0.03) !important;
-    color: #d4d4d8 !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    background: rgba(255, 255, 255, 0.03) !important;
+    color: #D4D4D8 !important;
     height: auto !important;
     min-height: 56px !important;
     transition: all 0.15s ease !important;
 }
 div[data-testid="stMainBlockContainer"] div[data-testid="column"] button[kind="secondary"]:hover {
-    border-color: rgba(128, 128, 128, 0.35) !important;
-    background: rgba(128, 128, 128, 0.07) !important;
-    color: #ffffff !important;
+    border-color: rgba(255, 255, 255, 0.22) !important;
+    background: rgba(255, 255, 255, 0.06) !important;
+    color: #FFFFFF !important;
 }
 
 /* Minimal Expander */
 div[data-testid="stExpander"] {
-    border: 1px solid rgba(128, 128, 128, 0.15) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
     border-radius: 6px !important;
-    background: transparent !important;
+    background: rgba(255, 255, 255, 0.02) !important;
     margin-bottom: 0.5rem !important;
 }
 div[data-testid="stExpander"] details summary p {
     font-size: 0.82rem !important;
-    color: #8a8f98 !important;
+    color: #A1A1AA !important;
     font-weight: 500 !important;
 }
 div[data-testid="stExpander"] div[data-testid="stExpanderDetails"] {
     font-size: 0.85rem !important;
-    color: #a1a1aa !important;
+    color: #D4D4D8 !important;
     line-height: 1.6 !important;
 }

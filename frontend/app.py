@@ -42,7 +42,8 @@ from frontend.components import (
     render_copy_button,
     get_suggested_questions,
     render_suggested_prompts,
-    render_model_selector
+    render_model_selector,
+    render_inference_mode_selector
 )
 
 # Page configuration (Minimalist, English, SEO-optimized)
@@ -91,7 +92,7 @@ with st.sidebar:
 
     if uploaded_files:
         if len(uploaded_files) > 5:
-            st.warning("⚠️ Khuyến nghị: Nên tải 3–5 tài liệu mỗi lượt để hệ thống xử lý nhanh và ổn định nhất.")
+            st.warning("Khuyến nghị: Nên tải 3–5 tài liệu mỗi lượt để hệ thống xử lý nhanh và ổn định nhất.")
 
         new_files = [f for f in uploaded_files if f.name not in indexed_filenames]
         is_processing = st.session_state.get("is_processing_docs", False)
@@ -198,13 +199,16 @@ with st.sidebar:
     top_k = config.TOP_K_RETRIEVAL
     selected_provider = config.LLM_PROVIDER
     selected_model = config.LLM_MODEL
+    inference_mode = "fast"
 
     with st.expander("Mô hình & Cấu hình", expanded=True):
+        inference_mode = render_inference_mode_selector()
+        st.markdown("---")
         selected_provider, selected_model = render_model_selector()
         st.markdown("---")
         top_k = st.slider("Số đoạn trích xuất (Top-K)", min_value=1, max_value=8, value=config.TOP_K_RETRIEVAL)
         st.caption(f"Embedding: `{config.EMBEDDING_PROVIDER}` (`{config.EMBEDDING_MODEL}`)")
-        if st.button("🔄 Nạp lại cấu hình .env", use_container_width=True, help="Tải lại các giá trị mới nhất từ file .env mà không cần restart server"):
+        if st.button("Nạp lại cấu hình .env", use_container_width=True, help="Tải lại các giá trị mới nhất từ file .env mà không cần restart server"):
             config.reload()
             st.toast("Đã nạp lại cấu hình từ .env!")
             st.rerun()
@@ -232,7 +236,8 @@ for idx, msg in enumerate(st.session_state.messages):
         if msg.get("citations"):
             render_citation_cards(msg["citations"])
         if msg.get("role") == "assistant" and msg.get("model_name"):
-            st.caption(f"Mô hình: `{msg['model_name']}`")
+            mode_tag = "Thinking" if msg.get("mode") == "thinking" else "Fast"
+            st.caption(f"{mode_tag} • Model: `{msg['model_name']}`")
 
 # If conversation is empty, display contextual starter prompt suggestions
 if not st.session_state.messages:
@@ -255,14 +260,16 @@ if active_question:
     # 2. Process response from HedgeDoc RAG Engine
     with st.chat_message("assistant"):
         try:
-            with st.spinner("Processing..."):
+            spinner_text = "Đang phân tích đa chiều & suy luận sâu..." if inference_mode == "thinking" else "Đang truy xuất & phản hồi nhanh..."
+            with st.spinner(spinner_text):
                 query_res = engine.query(
                     question=active_question,
                     top_k=top_k,
                     doc_id_filter=None,
                     stream=True,
                     llm_provider=selected_provider,
-                    llm_model=selected_model
+                    llm_model=selected_model,
+                    mode=inference_mode
                 )
                 thought_process = query_res.get("thought_process", "")
                 citations = query_res.get("citations", [])
@@ -279,7 +286,9 @@ if active_question:
                 render_citation_cards(citations)
 
             active_model_name = query_res.get("model_name", selected_model)
-            st.caption(f"Mô hình: `{active_model_name}`")
+            active_mode = query_res.get("mode", inference_mode)
+            mode_tag = "Thinking" if active_mode == "thinking" else "Fast"
+            st.caption(f"{mode_tag} • Model: `{active_model_name}`")
 
             # Persist to session state
             st.session_state.messages.append({
@@ -287,7 +296,8 @@ if active_question:
                 "content": full_answer,
                 "thought_process": thought_process,
                 "citations": citations,
-                "model_name": active_model_name
+                "model_name": active_model_name,
+                "mode": active_mode
             })
         except Exception as query_exc:
             error_msg = f"Đã xảy ra lỗi khi xử lý câu hỏi: {str(query_exc)}"

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <!-- Background: transparent -->
-  <!-- 13 Pure Black Edges Converging at Bottom-Left (185, 345) -->
+  <!-- 13 Edges Converging at Bottom-Left (185, 345) -->
   <line x1="185" y1="345" x2="283.6" y2="159.6" stroke="#18181B" stroke-width="3.6" stroke-linecap="round" />
   <line x1="185" y1="345" x2="300.5" y2="168.3" stroke="#18181B" stroke-width="3.6" stroke-linecap="round" />
   <line x1="185" y1="345" x2="316.6" y2="178.6" stroke="#18181B" stroke-width="3.6" stroke-linecap="round" />

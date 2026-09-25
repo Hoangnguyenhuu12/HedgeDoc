@@ -22,8 +22,6 @@ __all__ = [
 ]
 
 CSS_PATH = Path(__file__).parent / "styles.css"
-LOGO_SVG_PATH = Path(__file__).parent.parent / "assets" / "logo.svg"
-_LOGO_SVG = LOGO_SVG_PATH.read_text(encoding="utf-8") if LOGO_SVG_PATH.exists() else ""
 
 
 def inject_custom_css() -> None:
@@ -59,11 +57,10 @@ def inject_seo_meta() -> None:
 
 
 def render_header(scope_label: str = "All documents") -> None:
-    """Render minimal header with hedgehog-book logo and semantic H1 for SEO."""
+    """Render minimal clean header with semantic H1 for SEO."""
     st.markdown(
-        f"""
+        """
         <div class="app-header">
-            <div class="app-logo">{_LOGO_SVG}</div>
             <div class="app-header-text">
                 <h1 class="app-title">HedgeDoc</h1>
                 <p class="app-subtitle">Minimalist RAG & Document Intelligence with precise page-level citations.</p>
@@ -77,12 +74,39 @@ def render_header(scope_label: str = "All documents") -> None:
 def render_claude_thinking_box(thought_markdown: str, expanded: bool = False) -> None:
     """
     Render minimal thinking drawer, collapsed by default.
+    Adapts label based on whether it is a Fast trace or Deep Thinking trace.
     """
     if not thought_markdown:
         return
 
-    with st.expander("Thinking", expanded=expanded):
+    is_deep = "Chuỗi Suy Luận Chuyên Sâu" in thought_markdown or "Deep Reasoning" in thought_markdown
+    box_label = "Thinking (Suy luận sâu)" if is_deep else "Thinking (Tra cứu nhanh)"
+
+    with st.expander(box_label, expanded=expanded):
         st.markdown(thought_markdown)
+
+
+def render_inference_mode_selector() -> str:
+    """
+    Render dual inference mode selector (Fast vs Thinking).
+    Returns 'fast' or 'thinking'.
+    """
+    if "inference_mode" not in st.session_state:
+        st.session_state["inference_mode"] = "fast"
+
+    mode_options = ["Nhanh (Fast Mode)", "Suy luận sâu (Thinking)"]
+    current_idx = 0 if st.session_state["inference_mode"] == "fast" else 1
+
+    selected = st.radio(
+        "Chế độ suy luận",
+        options=mode_options,
+        index=current_idx,
+        help="• Fast Mode: Phản hồi tức thì (< 30s), tóm tắt trực diện.\n• Thinking Mode: Lập luận sâu (30-90s), phân tích đa chiều, kiểm chứng chéo số liệu & điều khoản."
+    )
+
+    mode = "fast" if "Fast" in selected else "thinking"
+    st.session_state["inference_mode"] = mode
+    return mode
 
 
 def render_thought_and_citations(

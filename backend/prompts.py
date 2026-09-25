@@ -1,6 +1,7 @@
 """
 Anti-hallucination Prompt Engine (Strict Grounding & Citation Traceability).
 Enforces zero hallucination, strict factual discipline, and page-level citations for LLMs.
+Supports both Fast Mode (minimal direct response) and Thinking Mode (deep structured reasoning).
 """
 
 from typing import List, Dict, Any, Optional
@@ -48,21 +49,59 @@ CORE PRINCIPLES:
    - NEVER output Chinese characters, internal reasoning traces, or meta-commentary explaining whether you adhered to the rules.
 """
 
+THINKING_RAG_SYSTEM_PROMPT = """You are HedgeDoc Deep Reasoning Engine, an enterprise-grade document intelligence and legal/financial analysis assistant.
+
+MISSION:
+Provide comprehensive, structured, in-depth analysis based SOLELY on the provided context in <context>. Respond in the language of the user's inquiry (e.g., Vietnamese or English).
+
+CORE PRINCIPLES:
+1. STRICT GROUNDING (ZERO HALLUCINATION):
+   - Only rely on facts, numbers, dates, and statements directly present in <context>.
+   - Never extrapolate, speculate, or incorporate outside knowledge.
+   - If <context> truly lacks information about the requested topic, decline concisely:
+     - Vietnamese: "Tài liệu không có thông tin về nội dung này."
+     - English: "The provided documents do not contain information to answer this question."
+
+2. DEEP STRUCTURED SYNTHESIS:
+   - Organize your response into clear, professional sections:
+     * Tóm tắt kết luận trực diện (Executive Summary)
+     * Phân tích căn cứ chi tiết (In-depth Factual Analysis by Article/Section/Financial Metric)
+     * Đánh giá & Lưu ý thực thi (Compliance Notes, Boundaries or Cross-document Observations)
+   - For financial spreadsheets or tabular data, preserve exact metrics, currency units, quarters, and column definitions without rounding or misattributing numbers.
+   - For contracts, policies, and regulations, clarify specific conditions, responsibilities, exceptions, and procedural steps.
+
+3. CLEAN PRESENTATION (NO INLINE CITATION TAGS):
+   - Do NOT append inline bracketed citations like [Source: ...] or [Nguồn: ...] in your response text.
+   - The user interface automatically aggregates and presents citations in a dedicated 'Sources & Citations' section below your answer.
+
+4. RESPONSE STYLE:
+   - Thorough, analytical, highly disciplined, and objective.
+   - Do NOT use decorative emojis or irrelevant conversational pleasantries.
+
+5. LANGUAGE STRICTNESS:
+   - Always respond strictly in the same language as the user's question (e.g. English for English questions, Vietnamese for Vietnamese questions).
+   - Cross-Lingual Synthesis: Translate and synthesize foreign facts accurately into the user's inquiry language.
+   - NEVER output Chinese characters, internal reasoning traces, or meta-commentary explaining whether you adhered to the rules.
+"""
+
 
 def build_rag_prompt(
     query: str,
     retrieved_chunks: List[Dict[str, Any]],
     history_text: str = "",
-    all_doc_names: Optional[List[str]] = None
+    all_doc_names: Optional[List[str]] = None,
+    mode: str = "fast"
 ) -> str:
     """
     Encapsulates retrieved chunks from the vector store and recent conversation history into a structured prompt.
+    Adapts guidelines based on 'fast' or 'thinking' mode.
 
     Args:
         query: Current user question.
         retrieved_chunks: Relevant chunks retrieved from vector store.
         history_text: Formatted recent conversation history (if any).
         all_doc_names: List of all document names currently in the knowledge base.
+        mode: "fast" or "thinking".
 
     Returns:
         Complete prompt string ready for LLM generation.
@@ -75,10 +114,17 @@ def build_rag_prompt(
         page_number = meta.get("page_number", "N/A")
         text = chunk.get("text", "").strip()
         loc_label = meta.get("location_label")
+        struct_path = meta.get("struct_path")
+        
+        loc_info = []
         if loc_label:
-            loc_str = f"Page: {page_number} | Location: {loc_label}"
-        else:
-            loc_str = f"Page: {page_number}"
+            loc_info.append(f"Location: {loc_label}")
+        if struct_path:
+            loc_info.append(f"Path: {struct_path}")
+        if page_number is not None and str(page_number) != "N/A":
+            loc_info.append(f"Page: {page_number}")
+
+        loc_str = " | ".join(loc_info) if loc_info else f"Page: {page_number}"
 
         block = (
             f"[Segment {idx}] (Document: {file_name} | {loc_str})\n"
@@ -105,11 +151,21 @@ def build_rag_prompt(
         f"<context>\n{context_str}\n</context>\n"
     )
 
-    prompt_parts.append(
-        f"<question>\n{query.strip()}\n</question>\n\n"
-        f"Answer the question above based STRICTLY on <context>. "
-        f"Respond in the same language as the question (e.g. English for English questions, Vietnamese for Vietnamese questions). "
-        f"Synthesize all relevant information directly without meta-commentary."
-    )
+    if mode == "thinking":
+        prompt_parts.append(
+            f"<question>\n{query.strip()}\n</question>\n\n"
+            f"Thực hiện phân tích chuyên sâu (Thinking Mode) cho câu hỏi trên dựa HOÀN TOÀN vào <context>:\n"
+            f"1. Tóm tắt kết luận ngắn gọn, trực diện.\n"
+            f"2. Trình bày chi tiết từng căn cứ, số liệu bảng biểu hoặc điều khoản cụ thể.\n"
+            f"3. Nêu rõ các lưu ý thực thi, phạm vi áp dụng hoặc điều kiện loại trừ nếu có trong tài liệu.\n"
+            f"Trả lời bằng cùng ngôn ngữ với câu hỏi. Tuyệt đối không suy diễn ngoài <context>."
+        )
+    else:
+        prompt_parts.append(
+            f"<question>\n{query.strip()}\n</question>\n\n"
+            f"Answer the question above based STRICTLY on <context>. "
+            f"Respond in the same language as the question (e.g. English for English questions, Vietnamese for Vietnamese questions). "
+            f"Synthesize all relevant information directly without meta-commentary."
+        )
 
     return "\n".join(prompt_parts)
