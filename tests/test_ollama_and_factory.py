@@ -19,7 +19,7 @@ def test_provider_factory_available_models():
     assert "gpt-4o-mini" in openai_models
 
     ollama_models = ProviderFactory.get_available_models("ollama")
-    assert "qwen2.5:7b" in ollama_models
+    assert "deepseek-r1:8b" in ollama_models
 
 
 def test_ollama_status_offline_graceful():
@@ -57,9 +57,9 @@ def test_rag_engine_dynamic_llm_switching():
     assert llm_gemini.model_name == "gemini-2.5-flash"
 
     # Switch to Ollama
-    llm_ollama = engine.get_llm(provider="ollama", model_name="qwen2.5:7b")
+    llm_ollama = engine.get_llm(provider="ollama", model_name="deepseek-r1:8b")
     assert isinstance(llm_ollama, OllamaLLM)
-    assert llm_ollama.model_name == "qwen2.5:7b"
+    assert llm_ollama.model_name == "deepseek-r1:8b"
 
     # Switching back returns cached instance
     cached_gemini = engine.get_llm(provider="gemini", model_name="gemini-2.5-flash")

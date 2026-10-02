@@ -13,6 +13,7 @@ if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
 import importlib
+import data_layer.ocr
 import data_layer.loader
 import data_layer.vector_store
 import backend.providers.ollama_provider
@@ -20,6 +21,7 @@ import backend.providers.factory
 import backend.prompts
 import backend.rag_engine
 import frontend.components
+importlib.reload(data_layer.ocr)
 importlib.reload(data_layer.loader)
 importlib.reload(data_layer.vector_store)
 importlib.reload(backend.providers.ollama_provider)
@@ -27,6 +29,7 @@ importlib.reload(backend.providers.factory)
 importlib.reload(backend.prompts)
 importlib.reload(backend.rag_engine)
 importlib.reload(frontend.components)
+
 
 from config import config
 from backend.rag_engine import RAGEngine, strip_inline_citations

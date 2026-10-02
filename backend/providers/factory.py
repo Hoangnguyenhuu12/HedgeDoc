@@ -32,9 +32,9 @@ class ProviderFactory:
             "gpt-3.5-turbo"
         ],
         "ollama": [
-            "qwen2.5:7b",
-            "llama3.1:8b",
             "deepseek-r1:8b",
+            "qwen2.5:14b",
+            "llama3.1:8b",
             "qwen2.5:3b",
             "mistral:7b"
         ]

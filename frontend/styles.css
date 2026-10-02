@@ -57,17 +57,85 @@ html, body, [class*="css"] {
     margin-bottom: 0.4rem;
     border: 1px solid rgba(59, 130, 246, 0.3);
 }
-.citation-snippet {
-    font-size: 0.85rem;
-    line-height: 1.5;
-    color: #D4D4D8;
+
+/* Dedicated Scrollable Box for Sources & Citations */
+.citation-scroll-box {
+    max-height: 310px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 6px;
+    margin-top: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+}
+
+/* Sleek dark-mode scrollbar */
+.citation-scroll-box::-webkit-scrollbar {
+    width: 6px;
+}
+.citation-scroll-box::-webkit-scrollbar-track {
     background: rgba(255, 255, 255, 0.03);
-    padding: 0.6rem 0.8rem;
+    border-radius: 4px;
+}
+.citation-scroll-box::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.18);
+    border-radius: 4px;
+}
+.citation-scroll-box::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.35);
+}
+
+.citation-card {
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 0.65rem 0.85rem;
+    transition: all 0.15s ease-in-out;
+}
+.citation-card:hover {
+    border-color: rgba(59, 130, 246, 0.45);
+    background: rgba(59, 130, 246, 0.03);
+}
+.citation-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #F4F4F5;
+    margin-bottom: 0.35rem;
+}
+.citation-card-title {
+    color: #E4E4E7;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 75%;
+}
+.citation-card-badge {
+    font-size: 0.72rem;
+    color: #60A5FA;
+    background: rgba(59, 130, 246, 0.12);
+    padding: 0.12rem 0.45rem;
+    border-radius: 4px;
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    font-weight: 500;
+}
+.citation-snippet {
+    font-size: 0.82rem;
+    line-height: 1.45;
+    color: #D4D4D8;
+    background: rgba(0, 0, 0, 0.25);
+    padding: 0.5rem 0.75rem;
     border-radius: 6px;
     border-left: 3px solid #3B82F6;
-    margin-top: 0.3rem;
+    margin: 0;
     font-style: italic;
+    font-family: 'Inter', sans-serif;
+    word-break: break-word;
 }
+
 
 /* Sidebar Document List */
 div[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] {

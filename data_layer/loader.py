@@ -8,8 +8,9 @@ import hashlib
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Union, Optional
+from typing import List, Union, Optional, Callable
 import pymupdf as fitz
+from config import config
 
 
 @dataclass
@@ -42,21 +43,40 @@ class BaseDocumentLoader:
 
 
 class PDFDocumentLoader(BaseDocumentLoader):
-    """Loader and processor for PDF documents using PyMuPDF."""
+    """Loader and processor for PDF documents using PyMuPDF and Hybrid VLM OCR."""
 
-    def __init__(self, min_char_threshold: int = 15):
+    def __init__(self, min_char_threshold: int = 15, enable_ocr: Optional[bool] = None):
         self.min_char_threshold = min_char_threshold
+        self.enable_ocr = enable_ocr if enable_ocr is not None else config.ENABLE_OCR
 
-    def load_single_pdf(self, file_path: Union[str, Path]) -> List[ExtractedPage]:
-        """Extract pages from a PDF file."""
+    def load_single_pdf(
+        self,
+        file_path: Union[str, Path],
+        progress_callback: Optional[Callable[[int, int, str], None]] = None
+    ) -> List[ExtractedPage]:
+        """
+        Extract pages from a PDF file with unified hybrid extraction:
+        - Digital text & Markdown table conversion for text-rich pages.
+        - Sliding-window VLM OCR with heading context tracking for scanned / low-text pages.
+        """
         path = Path(file_path)
         if not path.exists():
             raise FileNotFoundError(f"Document file not found at: {path}")
 
         doc_id = self._generate_doc_id(path)
-        extracted_pages: List[ExtractedPage] = []
 
         try:
+            from .ocr import process_pdf_pages_hybrid
+            return process_pdf_pages_hybrid(
+                file_path=path,
+                doc_id=doc_id,
+                min_char_threshold=self.min_char_threshold,
+                enable_ocr=self.enable_ocr,
+                progress_callback=progress_callback
+            )
+        except Exception as ocr_err:
+            # Safe Fallback: Read raw digital text with fitz if OCR module encounters critical failure
+            extracted_pages: List[ExtractedPage] = []
             with fitz.open(path) as doc:
                 total_pages = len(doc)
                 for page_idx in range(total_pages):
@@ -75,10 +95,8 @@ class PDFDocumentLoader(BaseDocumentLoader):
                                 location_label=f"Trang {page_idx + 1}"
                             )
                         )
-        except Exception as e:
-            raise RuntimeError(f"Error reading PDF file '{path.name}': {str(e)}") from e
+            return extracted_pages
 
-        return extracted_pages
 
     def load_multiple_pdfs(self, file_paths: List[Union[str, Path]]) -> List[ExtractedPage]:
         """Extract text from multiple PDF files."""
@@ -267,7 +285,11 @@ class MultiFormatDocumentLoader(BaseDocumentLoader):
         self.docx_loader = DocxDocumentLoader(min_char_threshold=min_char_threshold)
         self.excel_loader = ExcelDocumentLoader(min_char_threshold=min_char_threshold)
 
-    def load_document(self, file_path: Union[str, Path]) -> List[ExtractedPage]:
+    def load_document(
+        self,
+        file_path: Union[str, Path],
+        progress_callback: Optional[Callable[[int, int, str], None]] = None
+    ) -> List[ExtractedPage]:
         """Dispatch document loading based on file extension."""
         path = Path(file_path)
         if not path.exists():
@@ -275,7 +297,7 @@ class MultiFormatDocumentLoader(BaseDocumentLoader):
 
         suffix = path.suffix.lower()
         if suffix == ".pdf":
-            return self.pdf_loader.load_single_pdf(path)
+            return self.pdf_loader.load_single_pdf(path, progress_callback=progress_callback)
         elif suffix in [".docx", ".doc"]:
             return self.docx_loader.load_single_docx(path)
         elif suffix in [".xlsx", ".xls"]:
@@ -287,8 +309,13 @@ class MultiFormatDocumentLoader(BaseDocumentLoader):
             )
 
     # Backward compatibility alias
-    def load_single_pdf(self, file_path: Union[str, Path]) -> List[ExtractedPage]:
-        return self.load_document(file_path)
+    def load_single_pdf(
+        self,
+        file_path: Union[str, Path],
+        progress_callback: Optional[Callable[[int, int, str], None]] = None
+    ) -> List[ExtractedPage]:
+        return self.load_document(file_path, progress_callback=progress_callback)
+
 
     def load_multiple_documents(self, file_paths: List[Union[str, Path]]) -> List[ExtractedPage]:
         all_pages: List[ExtractedPage] = []

@@ -119,31 +119,46 @@ def render_thought_and_citations(
 
 def render_citation_cards(citations: List[Dict[str, Any]]) -> None:
     """
-    Render citation cards in a clean, vertical list inside a collapsed expander.
+    Render citation cards in a sleek, scrollable container (~310px max-height).
+    Prevents vertical page bloat and allows fast cross-referencing.
     """
     if not citations:
         return
 
+    import html
+
+    cards_html = []
+    for cit in citations:
+        file_name = html.escape(str(cit.get("file_name", "Document")))
+        loc_label = html.escape(str(cit.get("location_label") or f"Trang {cit.get('page_number', 'N/A')}"))
+        rerank_score = cit.get("rerank_score")
+        distance = cit.get("distance")
+
+        badge_html = ""
+        if rerank_score is not None:
+            badge_html = f'<span class="citation-card-badge">Độ khớp: {rerank_score * 100:.0f}%</span>'
+        elif distance is not None:
+            badge_html = f'<span class="citation-card-badge">Khoảng cách: {distance:.3f}</span>'
+
+        snippet_raw = cit.get("snippet", "").strip()
+        snippet_html = f'<div class="citation-snippet">"{html.escape(snippet_raw)}"</div>' if snippet_raw else ""
+
+        card = f"""
+        <div class="citation-card">
+            <div class="citation-card-header">
+                <span class="citation-card-title">{file_name} &bull; {loc_label}</span>
+                {badge_html}
+            </div>
+            {snippet_html}
+        </div>
+        """
+        cards_html.append(card)
+
+    container_html = f'<div class="citation-scroll-box">{"".join(cards_html)}</div>'
+
     with st.expander(f"Sources & Citations ({len(citations)})", expanded=False):
-        for cit in citations:
-            file_name = cit.get("file_name", "Document")
-            loc_label = cit.get("location_label") or f"Trang {cit.get('page_number', 'N/A')}"
-            rerank_score = cit.get("rerank_score")
-            distance = cit.get("distance")
+        st.markdown(container_html, unsafe_allow_html=True)
 
-            score_parts = []
-            if rerank_score is not None:
-                score_parts.append(f"Độ khớp: {rerank_score * 100:.0f}%")
-            elif distance is not None:
-                score_parts.append(f"Dist: {distance:.4f}")
-            score_str = f" • *{', '.join(score_parts)}*" if score_parts else ""
-
-            snippet = cit.get("snippet", "").strip()
-
-            st.markdown(f"**{file_name} - {loc_label}**{score_str}")
-            if snippet:
-                st.markdown(f'<div class="citation-snippet">"{snippet}"</div>', unsafe_allow_html=True)
-            st.markdown("")
 
 
 @st.dialog("Xác nhận xóa tài liệu", width="small")
@@ -335,21 +350,34 @@ def render_model_selector() -> tuple[str, str]:
             st.caption("Ollama: Đang hoạt động (Online)")
             installed = ollama_status["models"]
             if installed:
+                # Find default index for qwen or first chat model
+                default_idx = 0
+                for idx, m in enumerate(installed):
+                    if "deepseek" in m.lower():
+                        default_idx = idx
+                        break
+                    elif "qwen" in m.lower():
+                        default_idx = idx
+                        break
+
                 model_options = installed + ["(Nhập model khác...)"]
-                chosen_opt = st.selectbox("Mô hình Local", options=model_options)
+                chosen_opt = st.selectbox("Mô hình Local", options=model_options, index=default_idx)
                 if chosen_opt == "(Nhập model khác...)":
-                    selected_model = st.text_input("Tên model Ollama", value="qwen2.5:7b").strip()
+                    selected_model = st.text_input("Tên model Ollama", value="deepseek-r1:8b").strip()
                 else:
                     selected_model = chosen_opt
+                st.caption("⚡ *Mẹo tốc độ:* Ollama chạy trên phần cứng nội bộ. Để phản hồi gõ chữ tức thì (~100 từ/giây), bạn có thể chọn nhà cung cấp **Gemini (Cloud)**.")
             else:
-                selected_model = st.text_input("Tên model Ollama", value="qwen2.5:7b").strip()
-                st.caption("Chưa có model nào được tải. Chạy `ollama pull qwen2.5:7b` trong terminal.")
+                selected_model = st.text_input("Tên model Ollama", value="deepseek-r1:8b").strip()
+                st.caption("Chưa có model chat nào được tải. Chạy `ollama pull deepseek-r1:8b` hoặc `ollama pull qwen2.5:14b` trong terminal.")
         else:
             st.caption("Ollama: Chưa kết nối (Offline)")
             st.info("Vui lòng mở ứng dụng Ollama hoặc chạy lệnh `ollama serve` trong PowerShell.")
-            selected_model = st.text_input("Tên model Ollama", value="qwen2.5:7b").strip()
+            selected_model = st.text_input("Tên model Ollama", value="deepseek-r1:8b").strip()
+
 
     st.session_state["selected_model"] = selected_model
+
     return selected_provider, selected_model
 
 

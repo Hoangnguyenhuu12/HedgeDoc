@@ -13,32 +13,51 @@ from .base import BaseLLM, BaseEmbedding
 logger = logging.getLogger(__name__)
 
 
+EMBEDDING_MODEL_KEYWORDS = ["embed", "bge-", "bge_", "minilm", "gte-", "e5-", "instructor"]
+
+
 def check_ollama_status(base_url: Optional[str] = None, timeout: float = 1.0) -> Dict[str, Any]:
     """
-    Check if Ollama server is running and return available installed models.
+    Check if Ollama server is running and return available installed models,
+    filtering out embedding-only models from chat LLM suggestions.
     """
     url = (base_url or config.OLLAMA_BASE_URL).rstrip("/")
     try:
         resp = requests.get(f"{url}/api/tags", timeout=timeout)
         if resp.status_code == 200:
             data = resp.json()
-            models = [m.get("name", "") for m in data.get("models", []) if m.get("name")]
+            all_models = [m.get("name", "") for m in data.get("models", []) if m.get("name")]
+            chat_models = [
+                m for m in all_models 
+                if not any(k in m.lower() for k in EMBEDDING_MODEL_KEYWORDS)
+            ]
+            embed_models = [
+                m for m in all_models 
+                if any(k in m.lower() for k in EMBEDDING_MODEL_KEYWORDS)
+            ]
             return {
                 "online": True,
-                "models": models,
-                "message": f"Ollama đang chạy ({len(models)} models có sẵn)."
+                "models": chat_models or all_models,
+                "all_models": all_models,
+                "embedding_models": embed_models,
+                "message": f"Ollama đang chạy ({len(chat_models)} chat models có sẵn)."
             }
         return {
             "online": False,
             "models": [],
+            "all_models": [],
+            "embedding_models": [],
             "message": f"Ollama phản hồi mã lỗi {resp.status_code}."
         }
     except Exception as exc:
         return {
             "online": False,
             "models": [],
+            "all_models": [],
+            "embedding_models": [],
             "message": f"Chưa khởi động Ollama ({url})."
         }
+
 
 
 class OllamaLLM(BaseLLM):
@@ -53,7 +72,7 @@ class OllamaLLM(BaseLLM):
         base_url: Optional[str] = None,
         temperature: Optional[float] = None
     ):
-        model = model_name or "qwen2.5:7b"
+        model = model_name or "deepseek-r1:8b"
         temp = temperature if temperature is not None else config.LLM_TEMPERATURE
         super().__init__(model_name=model, temperature=temp)
         self.base_url = (base_url or config.OLLAMA_BASE_URL).rstrip("/")

@@ -67,69 +67,52 @@ def strip_inline_citations(text: str) -> str:
 
 def clean_citation_stream(token_stream: Iterator[str]) -> Iterator[str]:
     """
-    Real-time token stream filter that suppresses bracketed citations and Chinese characters
-    while streaming tokens to the frontend.
+    Zero-latency real-time token stream filter.
+    Yields tokens instantaneously while stripping inline bracket citations
+    ([Source: ...], [Trang ...]) without stalling the streaming animation.
     """
     import re
     buffer = ""
-    inside_bracket = False
-    last_yielded_ends_with_space = False
 
     for token in token_stream:
+        # Strip rare accidental CJK characters
         token = re.sub(r"[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]+", "", token)
         if not token:
             continue
+
         buffer += token
-        while True:
-            if not inside_bracket:
-                if "[" in buffer:
-                    prefix, rest = buffer.split("[", 1)
-                    if prefix:
-                        if last_yielded_ends_with_space and prefix.startswith(" "):
-                            prefix = prefix.lstrip(" ")
-                        if prefix:
-                            yield prefix
-                            last_yielded_ends_with_space = prefix.endswith(" ")
-                    buffer = "[" + rest
-                    inside_bracket = True
-                else:
-                    if buffer:
-                        chunk = buffer
-                        if last_yielded_ends_with_space and chunk.startswith(" "):
-                            chunk = chunk.lstrip(" ")
-                        if chunk:
-                            yield chunk
-                            last_yielded_ends_with_space = chunk.endswith(" ")
-                        buffer = ""
-                    break
-            else:
-                if "]" in buffer:
-                    bracket_content, remaining = buffer.split("]", 1)
-                    full_tag = bracket_content + "]"
-                    lower_tag = full_tag.lower()
-                    if any(k in lower_tag for k in ["source", "nguồn", "trang", "page", "segment"]):
-                        # Suppress citation tag
-                        pass
-                    else:
-                        yield full_tag
-                        last_yielded_ends_with_space = full_tag.endswith(" ")
-                    buffer = remaining
-                    inside_bracket = False
-                else:
-                    if len(buffer) > 120:
-                        yield buffer
-                        last_yielded_ends_with_space = buffer.endswith(" ")
-                        buffer = ""
-                        inside_bracket = False
-                    break
+
+        # Fast path: No bracket in buffer -> yield immediately for zero-latency streaming
+        if "[" not in buffer:
+            yield buffer
+            buffer = ""
+            continue
+
+        # If bracket is present
+        if "]" in buffer:
+            # Complete bracket closed -> filter citation tags and yield remainder
+            cleaned = re.sub(r"\s*\[(?:Source|Nguồn|Trang|Page|Segment)[^\]]*\]", "", buffer, flags=re.IGNORECASE)
+            if cleaned:
+                yield cleaned
+            buffer = ""
+        else:
+            # Bracket opened but not closed yet
+            b_idx = buffer.find("[")
+            if b_idx > 0:
+                # Yield text before '[' immediately without waiting
+                yield buffer[:b_idx]
+                buffer = buffer[b_idx:]
+
+            # If unclosed bracket grows beyond 35 chars, it is not a citation tag -> flush immediately
+            if len(buffer) > 35:
+                yield buffer
+                buffer = ""
 
     if buffer:
-        lower_tag = buffer.lower()
-        if not (inside_bracket and any(k in lower_tag for k in ["source", "nguồn", "trang", "page", "segment"])):
-            if last_yielded_ends_with_space and buffer.startswith(" "):
-                buffer = buffer.lstrip(" ")
-            if buffer:
-                yield buffer
+        cleaned = re.sub(r"\s*\[(?:Source|Nguồn|Trang|Page|Segment)[^\]]*\]", "", buffer, flags=re.IGNORECASE)
+        if cleaned:
+            yield cleaned
+
 
 
 class RAGEngine:
@@ -183,7 +166,7 @@ class RAGEngine:
         """
         path = Path(pdf_path)
         try:
-            pages = self.loader.load_document(path)
+            pages = self.loader.load_document(path, progress_callback=progress_callback)
             if not pages:
                 return {
                     "status": "empty",
@@ -520,8 +503,9 @@ class RAGEngine:
             stem_words = [w for w in clean_stem.split() if len(w) > 2 and not w.isdigit()]
             if len(stem_words) >= 2:
                 matched_count = sum(1 for w in stem_words if w in q_clean)
-                if matched_count >= 2 and ("file" in q_clean or "tai lieu" in q_clean or matched_count == len(stem_words)):
+                if matched_count >= 2 and ("file" in q_clean or "tai lieu" in q_clean or "sach" in q_clean or "book" in q_clean or matched_count == len(stem_words)):
                     return d["doc_id"]
+
 
         return None
 
@@ -651,12 +635,14 @@ class RAGEngine:
                 logger.warning(f"Cross-Lingual candidate retrieval failed: {e}")
 
         # Step 3: Stage 2 Fine Reranking
+        final_k = max(k, min(12, len(all_indexed_docs) * 2)) if is_cross_doc else k
         retrieved_chunks = self.reranker.rerank(
             query=question,
             candidates=candidates,
-            top_k=k,
+            top_k=final_k,
             secondary_query=translated_query
         )
+
 
         # Extract citation metadata
         citations = self._extract_citations(retrieved_chunks)

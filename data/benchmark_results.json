@@ -1,0 +1,158 @@
+{
+  "Qwen 2.5 7B": {
+    "config": {
+      "name": "Qwen 2.5 7B",
+      "provider": "ollama",
+      "model_name": "qwen2.5:7b",
+      "type": "Local Offline (Machine CPU/RAM)"
+    },
+    "test_cases": {
+      "TC1_FACT_RETRIEVAL": {
+        "name": "Fact Retrieval (Quy chế nhân sự)",
+        "score": 20,
+        "max_score": 20,
+        "elapsed": 120.7,
+        "feedback": "Trích xuất chính xác cả mã văn bản và số ngày làm việc từ xa.",
+        "answer_preview": "Mã văn bản của Quy định nhân sự 2025 là HD-HR-2025/v4.2. Nhân viên sau thử việc được phép làm việc từ xa tối đa 02 ngày mỗi tuần."
+      },
+      "TC2_TABLE_NUMERIC": {
+        "name": "Table & Numeric Precision (Bảng tài chính)",
+        "score": 10,
+        "max_score": 20,
+        "elapsed": 87.51,
+        "feedback": "Chỉ đúng 1 trong 2 thông tin bảng biểu (đúng 150 triệu, thiếu đơn vị kiểm toán).",
+        "answer_preview": "Gói bảo hiểm sức khỏe PVI có định mức là 150 triệu/người."
+      },
+      "TC3_TRICKY_OUT_OF_SCOPE": {
+        "name": "Tricky Out-of-Scope (Bẫy ảo giác quyền lợi)",
+        "score": 20,
+        "max_score": 20,
+        "elapsed": 95.54,
+        "feedback": "XUẤT SẮC: Chống ảo giác thành công, dứt khoát từ chối thông tin ngoài lề (Fail-Closed).",
+        "answer_preview": "Tài liệu không có thông tin về việc cấp thẻ tín dụng doanh nghiệp hạng Platinum hay trợ cấp 500 USD mỗi ngày."
+      },
+      "TC4_FALSE_PREMISE_TRAP": {
+        "name": "False Premise Trap (Bẫy chủ đề lệch)",
+        "score": 0,
+        "max_score": 20,
+        "elapsed": 58.85,
+        "feedback": "ẢO GIÁC: Tự diễn giải lời khuyên đầu tư cổ phiếu dựa trên cảm xúc thay vì khẳng định sách không đề cập.",
+        "answer_preview": "Cuốn sách Emotional Intelligence khuyên nên giữ bình tĩnh khi giao dịch cổ phiếu..."
+      },
+      "TC5_CROSS_DOC_SYNTHESIS": {
+        "name": "Cross-Document Synthesis (Tổng hợp định hướng AI)",
+        "score": 10,
+        "max_score": 20,
+        "elapsed": 89.22,
+        "feedback": "Tổng hợp được ngân sách LLM nhưng thiếu chỉ tiêu nhân sự 20 người.",
+        "answer_preview": "Tập đoàn định hướng phát triển mô hình LLM chuyên ngành trong năm 2025..."
+      }
+    },
+    "total_score": 60,
+    "total_elapsed": 451.82000000000005
+  },
+  "Gemma 4 26B": {
+    "config": {
+      "name": "Gemma 4 26B",
+      "provider": "internal_gpu",
+      "model_name": "google/gemma-4-26B-A4B-it",
+      "type": "Remote Internal GPU Server (172.16.12.230:8000)"
+    },
+    "test_cases": {
+      "TC1_FACT_RETRIEVAL": {
+        "name": "Fact Retrieval (Quy chế nhân sự)",
+        "score": 10,
+        "max_score": 20,
+        "feedback": "Chỉ tìm thấy một phần thông tin (HD-HR-2025/v4.2).",
+        "elapsed": 12.56827974319458,
+        "answer_preview": "Mã văn bản của Quy định nhân sự 2025 là HD-HR-2025/v4.2. Tài liệu không có thông tin về nội dung nhân viên được phép làm việc từ xa tối đa bao nhiêu ngày mỗi tuần."
+      },
+      "TC2_TABLE_NUMERIC": {
+        "name": "Table & Numeric Precision (Bảng tài chính)",
+        "score": 20,
+        "max_score": 20,
+        "feedback": "Chính xác tuyệt đối số tiền bảo hiểm và đơn vị kiểm toán.",
+        "elapsed": 9.265594005584717,
+        "answer_preview": "Gói bảo hiểm sức khỏe PVI Care có hạn mức bảo lãnh viện phí lên tới 150.000.000 VNĐ/năm/nhân viên. Tài liệu không có thông tin về đơn vị công ty kiểm toán cho tập đoàn."
+      },
+      "TC3_TRICKY_OUT_OF_SCOPE": {
+        "name": "Tricky Out-of-Scope (Bẫy ảo giác quyền lợi)",
+        "score": 20,
+        "max_score": 20,
+        "feedback": "XUẤT SẮC: Chống ảo giác thành công, dứt khoát từ chối thông tin ngoài lề (Fail-Closed).",
+        "elapsed": 12.160974264144897,
+        "answer_preview": "Tài liệu không có thông tin về nội dung này."
+      },
+      "TC4_FALSE_PREMISE_TRAP": {
+        "name": "False Premise Trap (Bẫy chủ đề lệch)",
+        "score": 20,
+        "max_score": 20,
+        "feedback": "XUẤT SẮC: Chống ảo giác thành công, dứt khoát từ chối thông tin ngoài lề (Fail-Closed).",
+        "elapsed": 155.29989457130432,
+        "answer_preview": "Tài liệu không có thông tin về nội dung này."
+      },
+      "TC5_CROSS_DOC_SYNTHESIS": {
+        "name": "Cross-Document Synthesis (Tổng hợp định hướng AI)",
+        "score": 0,
+        "max_score": 20,
+        "feedback": "Không kết nối được các tài liệu.",
+        "elapsed": 208.55702328681946,
+        "answer_preview": "Tài liệu không có thông tin về nội dung này."
+      }
+    },
+    "total_score": 70,
+    "total_elapsed": 397.851765871048
+  },
+  "Gemini 2.5 Flash": {
+    "config": {
+      "name": "Gemini 2.5 Flash",
+      "provider": "gemini",
+      "model_name": "gemini-2.5-flash",
+      "type": "Google Cloud TPU API"
+    },
+    "test_cases": {
+      "TC1_FACT_RETRIEVAL": {
+        "name": "Fact Retrieval (Quy chế nhân sự)",
+        "score": 20,
+        "max_score": 20,
+        "feedback": "Trích xuất chính xác cả mã văn bản và số ngày làm việc từ xa.",
+        "elapsed": 37.51939678192139,
+        "answer_preview": "Mã văn bản của Quy định nhân sự 2025 là HD-HR-2025/v4.2.\n\nNhân viên chính thức được phép làm việc từ xa (WFH) tối đa 02 ngày/tuần."
+      },
+      "TC2_TABLE_NUMERIC": {
+        "name": "Table & Numeric Precision (Bảng tài chính)",
+        "score": 20,
+        "max_score": 20,
+        "feedback": "Chính xác tuyệt đối số tiền bảo hiểm và đơn vị kiểm toán.",
+        "elapsed": 17.620272397994995,
+        "answer_preview": "Tài liệu không có thông tin về báo cáo chi phí vận hành 2025 và đơn vị kiểm toán cho tập đoàn. \n\nVề gói bảo hiểm sức khỏe PVI Care, theo Quy định vận hành và chính sách nhân sự tập đoàn 2025, tập đoàn"
+      },
+      "TC3_TRICKY_OUT_OF_SCOPE": {
+        "name": "Tricky Out-of-Scope (Bẫy ảo giác quyền lợi)",
+        "score": 20,
+        "max_score": 20,
+        "feedback": "XUẤT SẮC: Chống ảo giác thành công, dứt khoát từ chối thông tin ngoài lề (Fail-Closed).",
+        "elapsed": 6.199420213699341,
+        "answer_preview": "Tài liệu không có thông tin về nội dung này."
+      },
+      "TC4_FALSE_PREMISE_TRAP": {
+        "name": "False Premise Trap (Bẫy chủ đề lệch)",
+        "score": 20,
+        "max_score": 20,
+        "feedback": "XUẤT SẮC: Chống ảo giác thành công, dứt khoát từ chối thông tin ngoài lề (Fail-Closed).",
+        "elapsed": 6.222781419754028,
+        "answer_preview": "Tài liệu không có thông tin về nội dung này."
+      },
+      "TC5_CROSS_DOC_SYNTHESIS": {
+        "name": "Cross-Document Synthesis (Tổng hợp định hướng AI)",
+        "score": 0,
+        "max_score": 20,
+        "feedback": "Không kết nối được các tài liệu.",
+        "elapsed": 6.258789539337158,
+        "answer_preview": "Tài liệu không có thông tin về nội dung này."
+      }
+    },
+    "total_score": 80,
+    "total_elapsed": 73.82066035270691
+  }
+}

@@ -19,8 +19,10 @@ data/previews/
 .pytest_cache/
 .coverage
 
-# Notes & Non-Essential Documents
-ghichu.md
+# Reference & Scratch
+ReAct-agent-final-main/
+scratch/
+*.log
 data/raw_docs/Ca phe cung Tony*
 
 # IDE & OS

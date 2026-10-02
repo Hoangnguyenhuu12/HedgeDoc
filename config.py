@@ -50,6 +50,15 @@ class AppConfig:
         self.CHUNK_SIZE: int = int(os.getenv("CHUNK_SIZE", "800"))
         self.CHUNK_OVERLAP: int = int(os.getenv("CHUNK_OVERLAP", "150"))
 
+        # OCR & Multimodal Document Intelligence
+        self.ENABLE_OCR: bool = os.getenv("ENABLE_OCR", "true").lower() in ("true", "1", "yes")
+        self.OCR_BASE_URL: str = os.getenv("OCR_BASE_URL", "http://172.16.12.230:8003/v1")
+        self.OCR_MODEL: str = os.getenv("OCR_MODEL", "Qwen/Qwen3-VL-8B-Instruct-FP8")
+        self.OCR_WINDOW_SIZE: int = int(os.getenv("OCR_WINDOW_SIZE", "3"))
+        self.OCR_MIN_CHAR_THRESHOLD: int = int(os.getenv("OCR_MIN_CHAR_THRESHOLD", "15"))
+        self.OCR_EXTRACT_METADATA: bool = os.getenv("OCR_EXTRACT_METADATA", "true").lower() in ("true", "1", "yes")
+
+
     def ensure_directories(self) -> None:
         """Ensure all required application data directories exist."""
         self.DATA_DIR.mkdir(parents=True, exist_ok=True)
