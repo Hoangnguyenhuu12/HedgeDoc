@@ -1,6 +1,6 @@
 # Ghi Chú Dự Án HedgeDoc (Dành Cho Agent Tiếp Theo)
 
-> **Cập nhật lần cuối**: 02/10/2026
+> **Cập nhật lần cuối**: 05/10/2026
 > **Mục đích file**: Lưu trữ toàn bộ bối cảnh hệ thống, các thay đổi kỹ thuật, trạng thái API và lưu ý vận hành để agent tiếp theo có thể tiếp tục công việc ngay lập tức mà không gặp sự cố lặp lại.
 
 ---
@@ -452,15 +452,111 @@ F:\HedgeDoc\
    - Tại Sidebar -> **Mô hình & Cấu hình** -> Chọn **Ollama (Local)** -> Chọn **deepseek-r1:8b** hoặc **qwen2.5:14b**.
    - Embedding tự động sử dụng `nomic-embed-text` từ cấu hình `.env` cho toàn bộ tài liệu nạp cục bộ.
 
+### 3.30. Tách & Độc Lập Hóa OCR Engine (Document OCR Engine - Hoàn thành Phase A)
+- **Thư mục dự án độc lập**: `document-ocr-engine/`
+  - `pyproject.toml`, `requirements.txt`: Độc lập hóa hoàn toàn các thư viện phụ thuộc (`pymupdf`, `requests`, `pyyaml`, `pydantic`).
+  - `configs/default.yaml`: Quản lý cấu hình ngưỡng ký tự, VLM endpoint, window size riêng biệt.
+  - `src/schemas/ocr_output.py`: Chuẩn hóa JSON Schema trung gian (`OCROutput`, `OCRPage`, `OCRTable`, `OCRBlock`) theo Mục 8 của `kehoach.md`.
+  - `src/models/`: Tách tầng trừu tượng `BaseOCRBackend`, `PyMuPDFDigitalBackend`, `VLMOCRBackend`, `OCRBackendFactory`.
+  - `src/preprocessing/` & `src/postprocessing/`: Tổng quát hóa các cấp độ tiêu đề `#..####`, loại bỏ các tiền xử lý sách giáo khoa hardcoded (`Chuyên đề`, `Bài`), giữ nguyên bộ lọc chống ảo giác và làm sạch rò rỉ ngữ cảnh.
+  - `src/pipeline/ocr_pipeline.py`: Pipeline điều phối lai tự động phân loại trang kỹ thuật số vs trang scan và duy trì ngữ cảnh tiêu đề liên tục.
+  - `cli.py`: Công cụ dòng lệnh độc lập hỗ trợ xuất cả định dạng JSON chuẩn và Markdown đầy đủ: `python cli.py sample.pdf --output result.json`.
+  - `tests/`: Bộ unit tests độc lập (`test_schemas.py`, `test_postprocessing.py`, `test_pipeline.py`) đạt tỷ lệ vượt qua 100% (7/7 pass).
+
+### 3.31. Tách & Độc Lập Hóa RAG Engine (Document RAG Engine - Hoàn thành Phase B)
+- **Thư mục dự án độc lập**: `document-rag-engine/`
+  - `pyproject.toml`, `requirements.txt`: Độc lập hóa hoàn toàn các thư viện phụ thuộc (`chromadb`, `pydantic`, `pyyaml`, `httpx`, `pymupdf`, `python-docx`, `openpyxl`).
+  - `configs/`: 3 tệp cấu hình tách bạch (`embedding.yaml`, `retrieval.yaml`, `llm.yaml`).
+  - `src/schemas/rag_contracts.py`: Chuẩn hóa hợp đồng dữ liệu RAG (`IngestedDocument`, `IngestedPage`, `DocumentChunk`, `Citation`, `RAGQueryRequest`, `RAGQueryResponse`).
+  - `src/ingestion/document_loader.py`: Tầng nạp tài liệu độc lập; **không chứa bất kỳ mã nhận diện OCR nào**, hỗ trợ nạp trực tiếp kết quả JSON từ `document-ocr-engine`, tài liệu số PDF, Word, Excel.
+  - `src/chunking/chunker.py`: Kỹ thuật phân đoạn bám cấu trúc theo mô hình Cha - Con (`parent_size=1200`, `child_size=400`, `overlap=0`), nhận diện Điều/Khoản và bảo toàn bảng biểu.
+  - `src/embeddings/` & `src/generation/`: Tầng trừu tượng `EmbeddingFactory` và `LLMFactory` hỗ trợ hoán đổi linh hoạt giữa Ollama Local, Gemini Cloud, OpenAI.
+  - `src/retrieval/`: `VectorStoreManager` (ChromaDB persistence) và `HybridRetriever` (Two-stage: Coarse Vector search + Hybrid Reranker BM25/Lexical/RRF + Context Expansion mở rộng chunk cha).
+  - `src/pipeline/rag_pipeline.py`: Pipeline điều phối đầu cuối hỗ trợ cả `query` và `stream_query`.
+  - `cli.py`: Công cụ dòng lệnh độc lập hỗ trợ nạp tài liệu (`python cli.py index file.pdf`), nạp từ kết quả OCR (`python cli.py index result.json --from-ocr`) và tra cứu tri thức (`python cli.py query "câu hỏi"`).
+  - `tests/`: Bộ unit & integration tests độc lập (`test_chunker.py`, `test_ingestion.py`, `test_retrieval_and_pipeline.py`) đạt tỷ lệ vượt qua 100% (5/5 pass).
+
+---
+
+### 3.32. Xây Dựng AI Document Quality Gate (Hoàn thành Phase D)
+- **Thư mục dự án độc lập**: `document-quality-gate/`
+  - `pyproject.toml`, `requirements.txt`: Độc lập hóa hoàn toàn các thư viện phụ thuộc (`pillow`, `numpy`, `pymupdf`, `pydantic`, `pyyaml`).
+  - `configs/default.yaml`: Cấu hình ngưỡng đo lường mờ nhòe, tương phản, DPI và chênh lệch chiếu sáng.
+  - `src/schemas/quality_assessment.py`: Chuẩn hóa hợp đồng `PageQualityMetrics`, `PageAssessment`, `DocumentQualityAssessment`.
+  - `src/metrics/`: 4 bộ đo lường vật lý độc lập toán học bằng numpy:
+    - `BlurDetector`: Phương sai Laplacian phát hiện độ mờ nhòe và chuyển động.
+    - `ContrastDetector`: RMS contrast đánh giá độ đậm nhạt của nét chữ và nền giấy.
+    - `ResolutionDetector`: Ước lượng DPI hiệu dụng theo tỷ lệ A4 tiêu chuẩn.
+    - `ShadowDetector`: Độ lệch chuẩn độ sáng giữa các góc phần tư lưới $3 \times 3$ phát hiện bóng đổ và quầng sáng chói.
+  - `src/decision/readiness_engine.py`: Động cơ tổng hợp chỉ số, phân loại 3 luồng (*good -> direct_to_ocr; medium -> enhance_before_ocr; bad -> reject*) và gắn nhãn lỗi cụ thể.
+  - `src/pipeline/quality_pipeline.py`: Pipeline điều phối phân tích theo trang cho PDF hoặc hình ảnh tĩnh đơn lẻ.
+  - `cli.py`: Công cụ dòng lệnh độc lập thẩm định tài liệu: `python cli.py evaluate sample.pdf`.
+### 3.33. Mô-đun Phân Tích Bố Cục và Lọc Nhiễu Chữ Ký, Con Dấu (LayoutDetector)
+- **Vị trí tích hợp**: `document-ocr-engine/src/layout/`
+  - `src/layout/layout_detector.py`: Bộ phân tích bố cục không gian và thành phần phi văn bản:
+    - **Chữ ký tay (Signature)**: Định vị cụm đường cong Bezier ở nửa dưới trang và khu vực lân cận các từ khóa xác nhận chức danh.
+    - **Con dấu (Stamp)**: Nhận diện đường tròn/hình elip và dải màu đỏ/xanh đặc trưng của con dấu pháp lý.
+    - **Hình ảnh / Đồ họa (Figure)**: Nhận diện hình ảnh raster nhúng và biểu đồ để tránh OCR quét nhầm.
+    - **Bảng biểu (Table)**: Phát hiện vùng lưới bảng và lưu trữ tọa độ.
+  - `clean_text_artifacts`: Tự động loại bỏ triệt để các ký tự rác (`~~~~`, `__//`, `\\\\`, `||||`) do OCR quét trúng nét uốn của chữ ký; thay thế bằng ghi chú ngữ nghĩa rõ ràng: `> [Tài liệu có chữ ký xác nhận hợp lệ]`, `> [Tài liệu có con dấu xác nhận]`.
+  - `tests/test_layout.py`: Đạt 10/10 bài kiểm thử trong `document-ocr-engine/tests/`.
+
+---
+
+## 4. Cấu Trúc File Trọng Tâm
+
+```text
+F:\HedgeDoc\
+├── document-ocr-engine/                  # Module 1: OCR Engine độc lập (Phase A) [ĐÃ HOÀN THÀNH - 7/7 tests]
+│   ├── configs/default.yaml
+│   ├── src/ (schemas, models, preprocessing, postprocessing, pipeline)
+│   ├── api/main.py                       # Cổng giao tiếp REST API (FastAPI)
+│   ├── tests/ (7/7 tests pass)
+│   ├── cli.py
+│   └── README.md
+├── document-rag-engine/                  # Module 2: RAG Engine độc lập (Phase B) [ĐÃ HOÀN THÀNH - 5/5 tests]
+│   ├── configs/ (embedding.yaml, retrieval.yaml, llm.yaml)
+│   ├── src/ (schemas, ingestion, chunking, embeddings, generation, retrieval, pipeline)
+│   ├── api/main.py                       # Cổng giao tiếp REST API (FastAPI)
+│   ├── tests/ (5/5 tests pass)
+│   ├── cli.py
+│   └── README.md
+├── document-quality-gate/                # Module 3: Quality Gate độc lập (Phase D) [ĐÃ HOÀN THÀNH - 9/9 tests]
+│   ├── configs/default.yaml
+│   ├── src/ (schemas, preprocessing, metrics, decision, pipeline)
+│   ├── api/main.py                       # Cổng giao tiếp REST API (FastAPI)
+│   ├── tests/ (9/9 tests pass)
+│   ├── cli.py
+│   └── README.md
+├── HedgeDoc/                             # Module 4: Ứng dụng tích hợp HedgeDoc (Phase E) [ĐÃ HOÀN THÀNH - 4/4 tests]
+│   ├── frontend/ (app.py, components.py, styles.css)
+│   ├── services/ (quality_gate_client.py, ocr_client.py, rag_client.py, engine_loader.py)
+│   ├── workflows/ (document_pipeline.py)
+│   ├── configs/ (app_config.py)
+│   ├── tests/ (test_services.py, test_orchestrator.py - 4/4 pass)
+│   ├── run_app.py
+│   └── README.md
+├── legacy_references/                    # Thư mục lưu trữ tài liệu tham khảo cũ
+├── data_layer/                           # Data layer tương thích ngược
+├── backend/                              # Backend tương thích ngược
+├── frontend/                             # Frontend tương thích ngược
+├── tests/                                # Test suite tổng quát (25/25 pass)
+└── ghichu.md                             # File tài liệu context này
+```
+
 ---
 
 ## 6. Lộ Trình Triển Khai Kế Tiếp (Theo file `kehoach.md`)
 
-1. **Pha 1 (Bắt đầu)**: Lập Bản đồ Kiến trúc Hiện tại (**Current Architecture Map**, Dependency Map, phân loại chi tiết các tệp OCR, RAG, Shared Utils, Legacy).
-2. **Pha 2**: Tách `document-ocr-engine` thành module/repo độc lập, có CLI/Test riêng.
-3. **Pha 3**: Tách `document-rag-engine` thành module độc lập, chuẩn hóa input/output schema.
-4. **Pha 4**: Xây dựng `document-quality-gate` (Dataset, Baseline, Đánh giá OCR Readiness).
-5. **Pha 5**: Chuẩn hóa API Contract (REST API) cho từng Engine.
-6. **Pha 6**: Tái cấu trúc HedgeDoc thành Application Layer gọi các Client API.
+1. **Pha 1**: Lập Bản đồ Kiến trúc Hiện tại (**Current Architecture Map**, Dependency Map) -> ✅ **Đã hoàn thành** ([architecture_and_migration_map.md](file:///C:/Users/nhuuhoang.tts/.gemini/antigravity-ide/brain/d3286e06-985b-469d-9ac8-9ff3b80fadbd/architecture_and_migration_map.md)).
+2. **Pha 2 (Phase A)**: Tách `document-ocr-engine` thành module/repo độc lập, có CLI/Test riêng -> ✅ **Đã hoàn thành** ([document-ocr-engine/](file:///F:/HedgeDoc/document-ocr-engine/README.md)).
+3. **Pha 3 (Phase B)**: Tách `document-rag-engine` thành module độc lập, chuẩn hóa input/output schema -> ✅ **Đã hoàn thành** ([document-rag-engine/](file:///F:/HedgeDoc/document-rag-engine/README.md)).
+4. **Pha 4 (Phase C & D)**: Xây dựng `document-quality-gate` (Dataset, Baseline, Đánh giá OCR Readiness) -> ✅ **Đã hoàn thành** ([document-quality-gate/](file:///F:/HedgeDoc/document-quality-gate/README.md)).
+5. **Pha 5**: Chuẩn hóa API Contract (REST API với FastAPI) cho từng Engine -> ✅ **Đã hoàn thành** (Có `api/main.py` độc lập cho từng module).
+6. **Pha 6 (Phase E)**: Tái cấu trúc HedgeDoc thành Application Layer gọi các Client API/Module độc lập -> ✅ **Đã hoàn thành** ([HedgeDoc/](file:///F:/HedgeDoc/HedgeDoc/README.md)).
+
+
+
+
 
 

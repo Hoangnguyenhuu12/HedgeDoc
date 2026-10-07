@@ -1,35 +1,22 @@
-# Python & Virtual Environment
-.venv/
-venv/
-ENV/
+# Byte-compiled / optimized / DLL files
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
 
-# Secrets & Environment Variables (QUAN TRỌNG: Không commit API Key)
+# Virtual Environment
+.venv/
+env/
+venv/
+
+# Environment Variables
 .env
 .env.local
 
-# Persistent Data & Vector Database
-data/vector_store/
-data/previews/
-
-# Testing & Cache
+# Testing
 .pytest_cache/
 .coverage
+htmlcov/
 
-# Reference & Scratch
-ReAct-agent-final-main/
-scratch/
-*.log
-data/raw_docs/Ca phe cung Tony*
-
-# IDE & OS
-.vscode/
-.idea/
-*.swp
-*.swo
-.DS_Store
-Thumbs.db
-
+# Application data
+data/chroma_db/
+data/processed/

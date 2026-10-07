@@ -1,0 +1,47 @@
+\section{Mục tiêu trọng tâm trong tuần}
+\begin{itemize}
+    \item Khắc phục lỗi lọc khóa học theo chủ đề và trạng thái hiển thị trên thanh điều hướng.
+    \item Tiếp tục hoàn thiện, tinh chỉnh các giải pháp đã thử nghiệm tích hợp từ bộ tài liệu đặc tả kiến trúc phân hệ Trợ lý AI.
+\end{itemize}
+
+\section{Các công việc hoàn thành}
+
+\subsection{Khắc phục Lỗi Lọc Khóa học theo Chủ đề và Trạng thái Thanh Điều hướng}
+
+\subsubsection{Mô tả chức năng}
+Xử lý sự cố đồng bộ dữ liệu tra cứu và hoàn thiện giao diện chỉ mục khi chuyển hướng từ danh sách chủ đề sang phân hệ khóa học:
+\begin{itemize}
+    \item \textbf{Lọc chính xác theo chủ đề:} Khắc phục hiện tượng tải toàn bộ dữ liệu khi người dùng chọn xem khóa học từ một chủ đề cụ thể, bảo đảm danh sách hiển thị chỉ gồm các khóa học trực thuộc chủ đề đã chọn.
+    \item \textbf{Đồng bộ chỉ mục điều hướng:} Tự động nhận diện và làm nổi bật mục Khóa học trên thanh điều hướng bên trái với màu sắc nhận diện chuẩn khi truy cập vào phân hệ này.
+    \item \textbf{Bảo toàn tính linh hoạt:} Duy trì khả năng hiển thị toàn bộ danh sách khi người dùng truy cập trực tiếp vào phân hệ khóa học mà không đi qua liên kết lọc theo chủ đề.
+\end{itemize}
+
+\subsubsection{Chi tiết kỹ thuật}
+\begin{itemize}
+    \item \textbf{Mở rộng khung nhìn và chặn yêu cầu bất đồng bộ:} Bổ sung tệp hiển thị mở rộng, ghi đè hàm nạp bảng dữ liệu và thiết lập bộ lọc tự động bổ sung tham số định danh chủ đề vào các yêu cầu tìm kiếm ngầm.
+    \item \textbf{Xử lý trích xuất tham số dự phòng:} Bổ sung logic trích xuất tham số mã chủ đề từ chuỗi truy vấn hoặc tiêu đề trang giới thiệu tại bộ lọc sự kiện nhằm bảo vệ tính toàn vẹn dữ liệu mà không can thiệp vào các tệp mã nguồn gốc.
+\end{itemize}
+
+\subsection{Hoàn thiện và Tinh chỉnh Giải pháp Khai thác Tri thức Kiến trúc Trợ lý AI}
+
+\subsubsection{Mô tả chức năng}
+Tiếp tục hoàn thiện, tối ưu hóa các thành phần của hệ thống khai thác tri thức kiến trúc đã thử nghiệm nhằm nâng cao độ chính xác và trải nghiệm phản hồi:
+\begin{itemize}
+    \item \textbf{Nâng cấp mô hình suy luận cục bộ:} Thay thế các mô hình cũ bằng dòng mô hình suy luận logic chuỗi tư duy, tăng cường khả năng tự đối chiếu dữ kiện với tài liệu gốc nhằm triệt tiêu hoàn toàn hiện tượng tạo thông tin sai lệch ngoài tài liệu.
+    \item \textbf{Đánh giá thực nghiệm định lượng:} Thiết lập năm nhóm kịch bản kiểm thử trọng điểm nhằm đo lường khả năng trích xuất dữ kiện, đọc hiểu bảng biểu kỹ thuật, xử lý câu hỏi bẫy và tổng hợp kiến thức liên tài liệu.
+    \item \textbf{Tối ưu hóa hiển thị dẫn chứng và tốc độ phản hồi:} Đóng gói toàn bộ thông tin nguồn trích dẫn vào khung hiển thị cuộn độc lập giúp tra cứu vị trí trang thuận tiện; đồng thời loại bỏ độ trễ truyền dữ liệu dạng luồng để phản hồi hiển thị mượt mà tức thì.
+\end{itemize}
+
+\subsubsection{Chi tiết kỹ thuật}
+\begin{itemize}
+    \item \textbf{Bảo toàn cấu trúc phân đoạn phân cấp:} Hoàn thiện kỹ thuật phân tách tài liệu bám sát cấu trúc đề mục, bảng biểu và duy trì quan hệ giữa khối cha và các khối con nhằm giữ trọn vẹn ngữ cảnh kỹ thuật khi truy xuất.
+    \item \textbf{Tự động đồng bộ hóa dịch vụ mô hình:} Cập nhật logic nhận diện và kết nối danh mục mô hình nội bộ qua giao diện lập trình ứng dụng, hỗ trợ tự động chọn lựa mô hình suy luận phù hợp với độ phức tạp của câu hỏi.
+    \item \textbf{Tinh giản bộ lọc luồng dữ liệu:} Loại bỏ bộ đệm ký tự tĩnh trung gian, chuyển tiếp trực tiếp các mảnh văn bản lên giao diện người dùng theo thời gian thực mà không làm gián đoạn luồng sinh từ của mô hình.
+\end{itemize}
+
+\section{Các công việc đang thực hiện}
+\begin{itemize}
+    \item Duy trì theo dõi tính ổn định của hệ thống lọc khóa học và trạng thái thanh điều hướng trên môi trường vận hành thực tế.
+    \item Mở rộng bộ dữ liệu kiểm thử thực nghiệm trên các tài liệu đặc tả kiến trúc mới và tiếp tục tối ưu hóa tài nguyên tính toán cục bộ.
+    \item Nghiên cứu kế hoạch phân tách các thành phần thành các mô-đun độc lập theo định hướng kiến trúc nền tảng xử lý tài liệu thông minh.
+\end{itemize}
