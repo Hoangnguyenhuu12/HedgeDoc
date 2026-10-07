@@ -1,313 +1,232 @@
 """
-Main HedgeDoc Streamlit Application.
-Connects RAGEngine with user interface, supporting real-time streaming, multi-file management, and page-level citations.
+Main Streamlit Application for HedgeDoc Modular Document AI.
+Integrates:
+- Document Quality Gate (OCR Readiness Assessment)
+- Document OCR Engine (Structured Layout, Blocks, Tables)
+- Document RAG Engine (Hybrid Retrieval, Parent-Child Chunking, Multi-Provider LLM)
 """
 
 from pathlib import Path
 import sys
 import streamlit as st
 
-# Add workspace root to sys.path for safe absolute imports
-BASE_DIR = Path(__file__).resolve().parent.parent
-if str(BASE_DIR) not in sys.path:
-    sys.path.insert(0, str(BASE_DIR))
+# Configure sys.path so HedgeDoc package is directly importable
+CURRENT_FILE = Path(__file__).resolve()
+HEDGEDOC_ROOT = CURRENT_FILE.parent.parent
+WORKSPACE_ROOT = HEDGEDOC_ROOT.parent
 
-import importlib
-import data_layer.ocr
-import data_layer.loader
-import data_layer.vector_store
-import backend.providers.ollama_provider
-import backend.providers.factory
-import backend.prompts
-import backend.rag_engine
-import frontend.components
-importlib.reload(data_layer.ocr)
-importlib.reload(data_layer.loader)
-importlib.reload(data_layer.vector_store)
-importlib.reload(backend.providers.ollama_provider)
-importlib.reload(backend.providers.factory)
-importlib.reload(backend.prompts)
-importlib.reload(backend.rag_engine)
-importlib.reload(frontend.components)
+for p in [str(WORKSPACE_ROOT), str(HEDGEDOC_ROOT)]:
+    if p not in sys.path:
+        sys.path.insert(0, p)
 
-
-from config import config
-from backend.rag_engine import RAGEngine, strip_inline_citations
-from backend.memory import ConversationMemoryBuffer
-from frontend.components import (
+from HedgeDoc.configs.app_config import config
+from HedgeDoc.workflows.document_pipeline import DocumentPipelineOrchestrator
+from HedgeDoc.frontend.components import (
     inject_custom_css,
-    inject_seo_meta,
     render_header,
-    render_claude_thinking_box,
-    render_citation_cards,
-    render_thought_and_citations,
-    render_document_sidebar_cards,
-    render_copy_button,
-    get_suggested_questions,
-    render_suggested_prompts,
-    render_model_selector,
-    render_inference_mode_selector
+    render_quality_gate_card,
+    render_ocr_inspection,
+    render_thinking_box,
+    render_citations,
+    render_suggested_prompts
 )
 
-# Page configuration (Minimalist, English, SEO-optimized)
+# Page configuration
 st.set_page_config(
-    page_title="HedgeDoc — Minimalist RAG & Document Intelligence",
-    page_icon="assets/favicon.png",
+    page_title="HedgeDoc — Nền tảng Trí tuệ Tài liệu",
+    page_icon="📚",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 inject_custom_css()
-inject_seo_meta()
-
-# Auto hot-reload .env configuration on each session cycle
 config.reload()
 
-# Manage conversation memory in session state, re-instantiate RAGEngine fresh on each run
-if "memory" not in st.session_state:
-    st.session_state.memory = ConversationMemoryBuffer()
+# Initialize session state
+if "orchestrator" not in st.session_state or not hasattr(st.session_state.orchestrator, "delete_document"):
+    st.session_state.orchestrator = DocumentPipelineOrchestrator()
 
-engine = RAGEngine(memory=st.session_state.memory)
-
-# Initialize message history
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+if "latest_assessment" not in st.session_state:
+    st.session_state.latest_assessment = None
+
+if "latest_ocr" not in st.session_state:
+    st.session_state.latest_ocr = None
+
+orchestrator: DocumentPipelineOrchestrator = st.session_state.orchestrator
 
 # ==============================================================================
-# SIDEBAR: DOCUMENT MANAGEMENT & CONFIGURATION
+# SIDEBAR: DOCUMENT INGESTION & QUALITY PIPELINE
 # ==============================================================================
 with st.sidebar:
-    st.title("Documents")
-    st.caption("Quản lý tài liệu PDF trong kho tri thức.")
+    st.subheader("Tài liệu & Kiểm định")
+    st.caption("Quản lý tài liệu theo kiến trúc đa tầng độc lập.")
 
-    # Retrieve current indexed documents
-    indexed_docs = engine.vector_store.get_indexed_documents_summary()
-    indexed_filenames = {doc["file_name"] for doc in indexed_docs}
-
-    # 1. Upload new documents (PDF, Word, Excel)
     uploaded_files = st.file_uploader(
-        "Upload documents",
-        type=["pdf", "docx", "xlsx", "xls"],
+        "Tải lên tài liệu mới",
+        type=["pdf", "docx", "xlsx", "xls", "png", "jpg"],
         accept_multiple_files=True,
-        help="Hỗ trợ PDF, Word (.docx), Excel (.xlsx, .xls). Hệ thống tự động trích xuất nội dung và lập chỉ mục vào ChromaDB."
+        help="Hệ thống sẽ chạy qua Cổng kiểm soát chất lượng trước khi nhận dạng OCR và lập chỉ mục RAG."
     )
 
     if uploaded_files:
-        if len(uploaded_files) > 5:
-            st.warning("Khuyến nghị: Nên tải 3–5 tài liệu mỗi lượt để hệ thống xử lý nhanh và ổn định nhất.")
-
-        new_files = [f for f in uploaded_files if f.name not in indexed_filenames]
-        is_processing = st.session_state.get("is_processing_docs", False)
-
-        if new_files:
-            # Only show process button when there are new files
-            btn_label = "Đang xử lý tài liệu..." if is_processing else f"Nạp {len(new_files)} tài liệu mới"
-            if st.button(btn_label, disabled=is_processing, use_container_width=True, type="primary"):
-                st.session_state["is_processing_docs"] = True
-                st.session_state["upload_status"] = None
-                st.rerun()
-        else:
-            # Single concise message when all files are already indexed, no disabled buttons
-            if not st.session_state.get("upload_status"):
-                st.caption("Tất cả tài liệu tải lên đã được lưu trong kho.")
-
-    # Process documents pipeline when triggered
-    if st.session_state.get("is_processing_docs", False) and uploaded_files:
-        new_files = [f for f in uploaded_files if f.name not in indexed_filenames]
-        files_to_process = new_files if new_files else uploaded_files
-
-        progress_bar = st.progress(0, text="Bắt đầu nạp sách...")
-        total_count = len(files_to_process)
-        errors = []
-        success_count = 0
-        total_pages_added = 0
-        total_chunks_added = 0
-
-        try:
-            for idx, uploaded_file in enumerate(files_to_process, start=1):
-                save_path = config.RAW_DOCS_DIR / uploaded_file.name
+        if st.button("Nạp vào kho tri thức", type="primary", use_container_width=True):
+            progress_bar = st.progress(0, text="Bắt đầu quy trình nạp...")
+            for idx, up_file in enumerate(uploaded_files, start=1):
+                save_path = config.RAW_DOCS_DIR / up_file.name
                 with open(save_path, "wb") as f:
-                    f.write(uploaded_file.getbuffer())
+                    f.write(up_file.getbuffer())
 
-                def file_progress_cb(current, total, msg):
-                    pct = current / total if total > 0 else 1.0
-                    overall = (idx - 1) / total_count + (pct / total_count)
-                    progress_bar.progress(
-                        min(1.0, max(0.0, overall)),
-                        text=f"[{idx}/{total_count}] {uploaded_file.name}: {msg}"
+                def on_progress(msg: str, pct: float):
+                    progress_bar.progress(pct, text=f"[{idx}/{len(uploaded_files)}] {up_file.name}: {msg}")
+
+                result = orchestrator.process_document(save_path, progress_callback=on_progress)
+
+                if result.get("status") == "success":
+                    st.session_state.latest_assessment = (up_file.name, result.get("quality_assessment"))
+                    st.session_state.latest_ocr = result.get("ocr_summary")
+                    st.success(f"Nạp thành công: {up_file.name}")
+                    st.toast(f"Đã nạp thành công: {up_file.name}")
+                elif result.get("status") == "rejected":
+                    st.session_state.latest_assessment = (up_file.name, result.get("quality_assessment"))
+                    st.error(f"Từ chối {up_file.name}: {result.get('message')}")
+                else:
+                    st.error(f"Lỗi nạp {up_file.name}: {result.get('message')}")
+
+            progress_bar.progress(1.0, text="Hoàn tất quy trình xử lý.")
+
+    # Show Quality Gate scorecard if available
+    if st.session_state.latest_assessment:
+        with st.expander("Kết quả kiểm định chất lượng", expanded=True):
+            fname, assess = st.session_state.latest_assessment
+            render_quality_gate_card(assess, file_name=fname)
+            if st.session_state.latest_ocr:
+                render_ocr_inspection(st.session_state.latest_ocr)
+
+    # Show persistent knowledge base inventory (persists across F5 reloads!)
+    with st.expander("Kho tri thức đã lưu", expanded=True):
+        indexed_docs = orchestrator.list_indexed_documents()
+        if indexed_docs:
+            for idx, d in enumerate(indexed_docs):
+                row_col1, row_col2 = st.columns([0.82, 0.18])
+                with row_col1:
+                    st.markdown(
+                        f"<div style='font-size: 13px; line-height: 1.4; padding-top: 4px; word-break: break-all;'>"
+                        f"<b>{d['file_name']}</b><br/>"
+                        f"<span style='color: #94a3b8; font-size: 11px;'>{d['chunk_count']} đoạn véc-tơ</span>"
+                        f"</div>",
+                        unsafe_allow_html=True
                     )
+                with row_col2:
+                    if st.button("✕", key=f"del_btn_{idx}", help=f"Xóa {d['file_name']}"):
+                        st.session_state.pending_delete = d["file_name"]
 
-                res = engine.index_document(
-                    save_path,
-                    force_reindex=False,
-                    progress_callback=file_progress_cb
-                )
-
-                if res.get("status") in ["success", "already_indexed"]:
-                    success_count += 1
-                    total_pages_added += res.get("total_pages", 0)
-                    total_chunks_added += res.get("chunk_count", 0)
-                elif res.get("status") == "error":
-                    errors.append(f"{uploaded_file.name}: {res.get('message', 'Lỗi')}")
-
-            progress_bar.progress(1.0, text="Hoàn tất xử lý tài liệu.")
-            if errors:
-                st.session_state["upload_status"] = {
-                    "type": "error",
-                    "message": "Có lỗi khi nạp: " + "; ".join(errors)
-                }
-                st.toast("Có lỗi khi nạp tài liệu.")
-            else:
-                st.session_state["upload_status"] = {
-                    "type": "success",
-                    "message": f"Đã nạp thành công {success_count} tài liệu ({total_pages_added} trang, {total_chunks_added} đoạn)."
-                }
-                st.toast(f"Đã nạp thành công {success_count} tài liệu.")
-        except Exception as exc:
-            st.session_state["upload_status"] = {
-                "type": "error",
-                "message": f"Lỗi hệ thống: {str(exc)}"
-            }
-            st.toast(f"Lỗi nạp sách: {str(exc)}")
-        finally:
-            st.session_state["is_processing_docs"] = False
-            st.rerun()
-
-    # Single notification display (only 1 clean alert, no extra headings or dismiss buttons)
-    if st.session_state.get("upload_status"):
-        status_info = st.session_state["upload_status"]
-        if status_info["type"] == "success":
-            st.success(status_info["message"])
+            # Warning confirmation dialog
+            if st.session_state.get("pending_delete"):
+                target = st.session_state.pending_delete
+                st.warning(f"Xác nhận xóa tài liệu: **{target}**?")
+                c1, c2 = st.columns(2)
+                if c1.button("Xóa", type="primary", use_container_width=True, key="conf_del"):
+                    orchestrator.delete_document(target)
+                    st.session_state.pending_delete = None
+                    st.toast(f"Đã xóa tài liệu: {target}")
+                    st.rerun()
+                if c2.button("Hủy", use_container_width=True, key="cancel_del"):
+                    st.session_state.pending_delete = None
+                    st.rerun()
         else:
-            st.error(status_info["message"])
+            st.caption("Chưa có tài liệu nào trong kho tri thức.")
 
     st.markdown("---")
 
-    # 2. List of indexed documents
-    st.subheader("Tài liệu đã lưu")
-
-    def on_delete_document(doc_id: str, file_name: str) -> None:
-        if engine.delete_document(doc_id, file_name):
-            st.session_state["upload_status"] = None
-            st.toast(f"Đã xóa '{file_name}' khỏi kho dữ liệu.")
-        else:
-            st.error(f"Không thể xóa '{file_name}'.")
-
-    render_document_sidebar_cards(indexed_docs, on_delete=on_delete_document)
-
-    st.markdown("---")
-
-    # 3. Streamlined configuration & Model selection
-    top_k = config.TOP_K_RETRIEVAL
-    selected_provider = config.LLM_PROVIDER
-    selected_model = config.LLM_MODEL
-    inference_mode = "fast"
-
-    with st.expander("Mô hình & Cấu hình", expanded=True):
-        inference_mode = render_inference_mode_selector()
-        st.markdown("---")
-        selected_provider, selected_model = render_model_selector()
-        st.markdown("---")
-        top_k = st.slider("Số đoạn trích xuất (Top-K)", min_value=1, max_value=8, value=config.TOP_K_RETRIEVAL)
-        st.caption(f"Embedding: `{config.EMBEDDING_PROVIDER}` (`{config.EMBEDDING_MODEL}`)")
-        if st.button("Nạp lại cấu hình .env", use_container_width=True, help="Tải lại các giá trị mới nhất từ file .env mà không cần restart server"):
+    # Configuration panel
+    with st.expander("Cấu hình mô hình & Tham số", expanded=False):
+        top_k = st.slider("Số lượng đoạn trích xuất (Top-K)", min_value=1, max_value=8, value=config.TOP_K_RETRIEVAL)
+        st.caption(f"Mô hình ngôn ngữ: `{config.LLM_PROVIDER}` / `{config.LLM_MODEL}`")
+        st.caption(f"Mô hình nhúng: `{config.EMBEDDING_PROVIDER}` / `{config.EMBEDDING_MODEL}`")
+        if st.button("Làm mới cấu hình", use_container_width=True):
             config.reload()
-            st.toast("Đã nạp lại cấu hình từ .env!")
+            st.toast("Đã nạp lại các biến môi trường.")
             st.rerun()
 
-    # Only show Clear Chat History button when there are messages
     if st.session_state.messages:
-        if st.button("Xóa lịch sử chat", use_container_width=True, type="secondary"):
+        if st.button("Xóa lịch sử hội thoại", use_container_width=True):
             st.session_state.messages = []
-            if "memory" in st.session_state:
-                st.session_state.memory.clear()
             st.rerun()
-
 
 # ==============================================================================
-# MAIN WORKSPACE: RAG CONVERSATION
+# MAIN VIEW: CHAT & DOCUMENT INTELLIGENCE
 # ==============================================================================
 render_header()
 
-# Render all persisted session messages
-for idx, msg in enumerate(st.session_state.messages):
-    with st.chat_message(msg["role"]):
-        if msg.get("thought_process"):
-            render_claude_thinking_box(msg["thought_process"], expanded=False)
-        st.write(strip_inline_citations(msg["content"]))
-        if msg.get("citations"):
-            render_citation_cards(msg["citations"])
-        if msg.get("role") == "assistant" and msg.get("model_name"):
-            mode_tag = "Thinking" if msg.get("mode") == "thinking" else "Fast"
-            st.caption(f"{mode_tag} • Model: `{msg['model_name']}`")
+def handle_user_query(prompt_text: str):
+    """Appends query and triggers generation."""
+    st.session_state.messages.append({"role": "user", "content": prompt_text})
+    st.rerun()
 
-# If conversation is empty, display contextual starter prompt suggestions
-if not st.session_state.messages:
-    prompts = get_suggested_questions("All documents")
-    clicked_chip = render_suggested_prompts(prompts)
-    if clicked_chip:
-        st.session_state["pending_prompt"] = clicked_chip
+# Display chat history
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
+        if msg.get("thought"):
+            render_thinking_box(msg["thought"])
+        if msg.get("citations"):
+            render_citations(msg["citations"])
+
+# Handle pending assistant response
+if st.session_state.messages and st.session_state.messages[-1]["role"] == "user":
+    user_prompt = st.session_state.messages[-1]["content"]
+    with st.chat_message("assistant"):
+        history = [
+            {"role": m["role"], "content": m["content"]}
+            for m in st.session_state.messages[:-1]
+        ]
+
+        with st.spinner("Đang định tuyến và trích xuất căn cứ tài liệu..."):
+            res = orchestrator.stream_query(
+                query_text=user_prompt,
+                top_k=top_k,
+                chat_history=history
+            )
+
+        thought = res.get("thought", "")
+        citations = res.get("citations", [])
+        stream_gen = res.get("stream")
+
+        if thought:
+            render_thinking_box(thought)
+
+        if stream_gen:
+            def safe_stream():
+                try:
+                    for token in stream_gen:
+                        yield token
+                except Exception as exc:
+                    yield f"\n\n*(Thông báo: Quá trình truyền token bị gián đoạn: {str(exc)})*"
+
+            answer = st.write_stream(safe_stream())
+        else:
+            answer = res.get("answer", "Không tìm thấy nội dung liên quan trong tài liệu.")
+            st.markdown(answer)
+
+        if citations:
+            render_citations(citations)
+
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": answer,
+            "thought": thought,
+            "citations": citations
+        })
         st.rerun()
 
-# Handle new user query (from chat input or clicked starter chip)
-user_question = st.chat_input("Ask a question about the documents...")
-active_question = user_question or st.session_state.pop("pending_prompt", None)
+# Show suggested prompts ONLY when conversation is empty
+if not st.session_state.messages:
+    render_suggested_prompts(handle_user_query)
 
-if active_question:
-    # 1. Display user query
-    st.session_state.messages.append({"role": "user", "content": active_question})
-    with st.chat_message("user"):
-        st.write(active_question)
-
-    # 2. Process response from HedgeDoc RAG Engine
-    with st.chat_message("assistant"):
-        try:
-            spinner_text = "Đang phân tích đa chiều & suy luận sâu..." if inference_mode == "thinking" else "Đang truy xuất & phản hồi nhanh..."
-            with st.spinner(spinner_text):
-                query_res = engine.query(
-                    question=active_question,
-                    top_k=top_k,
-                    doc_id_filter=None,
-                    stream=True,
-                    llm_provider=selected_provider,
-                    llm_model=selected_model,
-                    mode=inference_mode
-                )
-                thought_process = query_res.get("thought_process", "")
-                citations = query_res.get("citations", [])
-
-            # Single thinking drawer, collapsed by default
-            if thought_process:
-                render_claude_thinking_box(thought_process, expanded=False)
-
-            # Stream generated answer
-            full_answer = st.write_stream(query_res["answer_stream"])
-
-            # Render citations if present
-            if citations:
-                render_citation_cards(citations)
-
-            active_model_name = query_res.get("model_name", selected_model)
-            active_mode = query_res.get("mode", inference_mode)
-            mode_tag = "Thinking" if active_mode == "thinking" else "Fast"
-            st.caption(f"{mode_tag} • Model: `{active_model_name}`")
-
-            # Persist to session state
-            st.session_state.messages.append({
-                "role": "assistant",
-                "content": full_answer,
-                "thought_process": thought_process,
-                "citations": citations,
-                "model_name": active_model_name,
-                "mode": active_mode
-            })
-        except Exception as query_exc:
-            error_msg = f"Đã xảy ra lỗi khi xử lý câu hỏi: {str(query_exc)}"
-            st.error(error_msg)
-            st.session_state.messages.append({
-                "role": "assistant",
-                "content": error_msg,
-                "thought_process": "",
-                "citations": []
-            })
+# Chat input box
+user_input = st.chat_input("Nhập câu hỏi tra cứu tài liệu tại đây...")
+if user_input:
+    handle_user_query(user_input)
