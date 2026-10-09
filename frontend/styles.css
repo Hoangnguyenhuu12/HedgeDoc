@@ -1,62 +1,298 @@
-/* HedgeDoc Modular Document AI UI Styles - Premium Dark & Adaptive Theme */
+/* HedgeDoc Modular Document AI UI Styles - Neutral Dark Charcoal & Pure Black Theme */
+/* Absolutely NO blue, slate-blue, or dark grayish-blue tones */
 
 :root {
-  --primary-color: #3b82f6;
-  --primary-hover: #2563eb;
-  --card-bg: #1e2430;
-  --card-border: #2e384d;
-  --text-main: #f1f5f9;
-  --text-muted: #94a3b8;
-  --pill-bg: #131722;
-  --pill-border: #263147;
+  --primary-color: #f4f4f5;
+  --primary-hover: #ffffff;
+  --card-bg: #111113;
+  --card-border: #232326;
+  --text-main: #f4f4f5;
+  --text-muted: #a1a1aa;
+  --pill-bg: #18181b;
+  --pill-border: #27272a;
 }
 
-/* Streamlit Button Theming */
-div.stButton > button {
-  background-color: #1e2430 !important;
-  color: #f1f5f9 !important;
-  border: 1px solid #2e384d !important;
+/* ==============================================================================
+   STREAMLIT BUTTONS: PURE BLACK & LIGHT BLACK (NEUTRAL CHARCOAL)
+   ============================================================================== */
+
+div.stButton > button,
+button[data-testid*="stBaseButton"],
+.stButton button {
+  background-color: #141416 !important;
+  color: #f4f4f5 !important;
+  border: 1px solid #27272a !important;
   border-radius: 8px !important;
   font-weight: 500 !important;
   font-size: 13px !important;
   transition: all 0.15s ease-in-out !important;
+  box-shadow: none !important;
 }
 
-div.stButton > button:hover {
-  background-color: #283142 !important;
-  border-color: #3b82f6 !important;
+div.stButton > button:hover,
+button[data-testid*="stBaseButton"]:hover,
+.stButton button:hover {
+  background-color: #222226 !important;
+  border-color: #3f3f46 !important;
   color: #ffffff !important;
 }
 
-div.stButton > button[kind="primary"] {
-  background-color: #2563eb !important;
-  color: #ffffff !important;
-  border: 1px solid #3b82f6 !important;
+div.stButton > button:active,
+button[data-testid*="stBaseButton"]:active {
+  background-color: #27272a !important;
+  border-color: #52525b !important;
 }
 
-div.stButton > button[kind="primary"]:hover {
-  background-color: #1d4ed8 !important;
-  border-color: #60a5fa !important;
+/* Primary Button (Nạp vào kho tri thức, Xác nhận xóa, v.v.) */
+div.stButton > button[kind="primary"],
+button[data-testid="stBaseButton-primary"],
+button[data-testid="stBaseButton-primary"]:disabled {
+  background-color: #1c1c20 !important;
+  color: #ffffff !important;
+  border: 1px solid #3f3f46 !important;
+  font-weight: 600 !important;
+}
+
+div.stButton > button[kind="primary"]:hover,
+button[data-testid="stBaseButton-primary"]:hover {
+  background-color: #27272b !important;
+  border-color: #52525b !important;
   color: #ffffff !important;
 }
 
-/* Small delete icon button on each file row */
-button[help^="Xóa"] {
-  padding: 2px 8px !important;
-  font-size: 11px !important;
-  font-weight: 700 !important;
-  min-height: 28px !important;
+/* Secondary Button */
+div.stButton > button[kind="secondary"],
+button[data-testid="stBaseButton-secondary"] {
+  background-color: #141416 !important;
+  color: #f4f4f5 !important;
+  border: 1px solid #27272a !important;
+}
+
+div.stButton > button[kind="secondary"]:hover,
+button[data-testid="stBaseButton-secondary"]:hover {
+  background-color: #222226 !important;
+  border-color: #3f3f46 !important;
+}
+
+/* ==============================================================================
+   NÚT XÓA ICON DẠNG KHÔNG KHUNG (FRAMELESS ICON BUTTON)
+   ============================================================================== */
+
+.del-btn-anchor {
+  display: none !important;
+}
+
+div[data-testid="stColumn"]:has(.del-btn-anchor),
+div[data-testid="stColumn"]:has(.del-btn-anchor) div[data-testid="stButton"],
+div[data-testid="stColumn"]:has(.del-btn-anchor) div.stButton {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+div[data-testid="stColumn"]:has(.del-btn-anchor) button,
+div[data-testid="stColumn"]:has(.del-btn-anchor) button[data-testid*="stBaseButton"],
+div[data-testid="stColumn"]:has(.del-btn-anchor) div.stButton > button {
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  border-width: 0 !important;
+  box-shadow: none !important;
+  outline: none !important;
+  border-radius: 0 !important;
+  color: #71717a !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  min-height: 24px !important;
   height: 28px !important;
-  margin-top: 4px !important;
-  color: #94a3b8 !important;
-  border-color: #334155 !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  font-size: 16px !important;
+  line-height: 28px !important;
+  cursor: pointer !important;
+  transition: color 0.15s ease-in-out !important;
 }
 
-button[help^="Xóa"]:hover {
-  color: #f87171 !important;
-  border-color: #ef4444 !important;
-  background-color: rgba(239, 68, 68, 0.15) !important;
+div[data-testid="stColumn"]:has(.del-btn-anchor) button:hover,
+div[data-testid="stColumn"]:has(.del-btn-anchor) div.stButton > button:hover {
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: #ef4444 !important;
 }
+
+/* Universal Fallback for browsers without :has() support */
+button[title^="Xóa"],
+button[aria-label^="Xóa"],
+button[title*="Xóa"],
+button[aria-label*="Xóa"] {
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  border-width: 0 !important;
+  box-shadow: none !important;
+  outline: none !important;
+  border-radius: 0 !important;
+  color: #71717a !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  min-height: 24px !important;
+  height: 28px !important;
+  width: 100% !important;
+  font-size: 16px !important;
+  cursor: pointer !important;
+  transition: color 0.15s ease-in-out !important;
+}
+
+button[title^="Xóa"]:hover,
+button[aria-label^="Xóa"]:hover,
+button[title*="Xóa"]:hover,
+button[aria-label*="Xóa"]:hover {
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: #ef4444 !important;
+}
+
+div[data-testid="stColumn"]:has(.del-btn-anchor) button div[data-testid="stMarkdownContainer"],
+button[title*="Xóa"] div[data-testid="stMarkdownContainer"],
+button[aria-label*="Xóa"] div[data-testid="stMarkdownContainer"] {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+  height: 100% !important;
+  overflow: visible !important;
+}
+
+div[data-testid="stColumn"]:has(.del-btn-anchor) button div[data-testid="stMarkdownContainer"] p,
+button[title*="Xóa"] div[data-testid="stMarkdownContainer"] p,
+button[aria-label*="Xóa"] div[data-testid="stMarkdownContainer"] p {
+  color: inherit !important;
+  font-size: 16px !important;
+  font-weight: 500 !important;
+  line-height: 1 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  white-space: normal !important;
+}
+
+/* Gợi ý câu hỏi (Interactive Chips) nằm gọn trên 1 dòng với tính năng co giãn linh hoạt */
+.chips-title + div[data-testid="stHorizontalBlock"] {
+  gap: 8px !important;
+  flex-wrap: nowrap !important;
+  overflow-x: auto !important;
+  padding-bottom: 4px !important;
+  scrollbar-width: thin !important;
+}
+
+.chips-title + div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
+  min-width: 0 !important;
+  flex: 1 1 0 !important;
+}
+
+.chips-title + div[data-testid="stHorizontalBlock"] button {
+  font-size: 12px !important;
+  padding: 6px 8px !important;
+  white-space: nowrap !important;
+  text-overflow: ellipsis !important;
+  overflow: hidden !important;
+  width: 100% !important;
+  display: block !important;
+}
+
+.chips-title + div[data-testid="stHorizontalBlock"] button div[data-testid="stMarkdownContainer"] p {
+  white-space: nowrap !important;
+  text-overflow: ellipsis !important;
+  overflow: hidden !important;
+}
+
+/* ==============================================================================
+   FILE UPLOADER: ĐEN & ĐEN NHẠT
+   ============================================================================== */
+
+div[data-testid="stFileUploader"] section {
+  background-color: #0f0f11 !important;
+  border: 1px dashed #27272a !important;
+  border-radius: 8px !important;
+}
+
+div[data-testid="stFileUploader"] section:hover {
+  border-color: #3f3f46 !important;
+}
+
+div[data-testid="stFileUploader"] button {
+  background-color: #18181b !important;
+  color: #f4f4f5 !important;
+  border: 1px solid #27272a !important;
+  border-radius: 6px !important;
+}
+
+div[data-testid="stFileUploader"] button:hover {
+  background-color: #222226 !important;
+  border-color: #3f3f46 !important;
+}
+
+/* ==============================================================================
+   EXPANDERS & SIDEBAR ELEMENTS
+   ============================================================================== */
+
+div[data-testid="stExpander"] {
+  border: 1px solid #232326 !important;
+  border-radius: 8px !important;
+  background-color: transparent !important;
+}
+
+div[data-testid="stExpander"] details {
+  background-color: #111113 !important;
+  border-radius: 8px !important;
+}
+
+div[data-testid="stExpander"] summary {
+  color: #e4e4e7 !important;
+}
+
+div[data-testid="stExpander"] summary:hover {
+  color: #ffffff !important;
+}
+
+/* ==============================================================================
+   CHAT INPUT & SEND BUTTON
+   ============================================================================== */
+
+div[data-testid="stChatInput"] {
+  background-color: #111113 !important;
+  border: 1px solid #27272a !important;
+  border-radius: 10px !important;
+}
+
+div[data-testid="stChatInput"]:focus-within {
+  border-color: #3f3f46 !important;
+}
+
+div[data-testid="stChatInput"] button {
+  background-color: #18181b !important;
+  color: #e4e4e7 !important;
+  border: 1px solid #27272a !important;
+}
+
+div[data-testid="stChatInput"] button:hover {
+  background-color: #27272a !important;
+  border-color: #3f3f46 !important;
+  color: #ffffff !important;
+}
+
+/* ==============================================================================
+   CUSTOM CARDS & WIDGETS
+   ============================================================================== */
 
 /* Quality Gate Card */
 .quality-card {
@@ -67,7 +303,7 @@ button[help^="Xóa"]:hover {
   margin-top: 10px;
   margin-bottom: 14px;
   color: var(--text-main) !important;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
 }
 
 .quality-header {
@@ -95,21 +331,21 @@ button[help^="Xóa"]:hover {
 }
 
 .badge-direct {
-  background: rgba(16, 185, 129, 0.18) !important;
+  background: rgba(16, 185, 129, 0.12) !important;
   color: #34d399 !important;
-  border: 1px solid rgba(16, 185, 129, 0.35) !important;
+  border: 1px solid rgba(16, 185, 129, 0.28) !important;
 }
 
 .badge-enhance {
-  background: rgba(245, 158, 11, 0.18) !important;
+  background: rgba(245, 158, 11, 0.12) !important;
   color: #fbbf24 !important;
-  border: 1px solid rgba(245, 158, 11, 0.35) !important;
+  border: 1px solid rgba(245, 158, 11, 0.28) !important;
 }
 
 .badge-reject {
-  background: rgba(239, 68, 68, 0.18) !important;
+  background: rgba(239, 68, 68, 0.12) !important;
   color: #f87171 !important;
-  border: 1px solid rgba(239, 68, 68, 0.35) !important;
+  border: 1px solid rgba(239, 68, 68, 0.28) !important;
 }
 
 .metric-grid {
@@ -151,13 +387,13 @@ button[help^="Xóa"]:hover {
   margin-bottom: 14px;
   color: var(--text-main) !important;
   font-size: 13px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
 }
 
 .ocr-header {
   font-weight: 700;
   font-size: 13px;
-  color: var(--primary-color) !important;
+  color: #f4f4f5 !important;
   margin-bottom: 8px;
   display: flex;
   align-items: center;
@@ -192,9 +428,9 @@ button[help^="Xóa"]:hover {
 }
 
 .ocr-badge-tag {
-  background: rgba(59, 130, 246, 0.15) !important;
-  color: #60a5fa !important;
-  border: 1px solid rgba(59, 130, 246, 0.3) !important;
+  background: #1c1c20 !important;
+  color: #d4d4d8 !important;
+  border: 1px solid #2d2d32 !important;
   padding: 2px 8px;
   border-radius: 4px;
   font-size: 11px;
@@ -203,13 +439,13 @@ button[help^="Xóa"]:hover {
 
 /* Thinking Box */
 .thought-box {
-  background: #181d27 !important;
-  border-left: 3px solid #6366f1 !important;
-  border: 1px solid #2a3447;
+  background: #101012 !important;
+  border-left: 3px solid #52525b !important;
+  border: 1px solid #232326;
   padding: 14px 18px;
   border-radius: 8px;
   font-size: 13px;
-  color: #cbd5e1 !important;
+  color: #d4d4d8 !important;
   margin-bottom: 12px;
   white-space: pre-wrap;
   line-height: 1.6;
@@ -217,24 +453,24 @@ button[help^="Xóa"]:hover {
 
 /* Citation Card */
 .citation-card {
-  background: #181d27 !important;
-  border: 1px solid #2a3447 !important;
+  background: #111113 !important;
+  border: 1px solid #232326 !important;
   border-radius: 10px;
   padding: 12px 16px;
   margin-top: 10px;
   font-size: 13px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
 }
 
 .citation-header {
   font-weight: 700;
-  color: #60a5fa !important;
+  color: #f4f4f5 !important;
   margin-bottom: 6px;
   font-size: 13px;
 }
 
 .citation-snippet {
-  color: #94a3b8 !important;
+  color: #a1a1aa !important;
   line-height: 1.5;
   font-size: 12px;
 }

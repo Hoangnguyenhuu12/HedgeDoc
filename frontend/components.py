@@ -157,28 +157,32 @@ def render_ocr_inspection(ocr_summary: Dict[str, Any]):
     )
 
 
-def render_thinking_box(thought: str):
+def render_thinking_box(thought: str, lang: str = "vi"):
     """Renders Claude-style thinking block."""
     if not thought or not thought.strip():
         return
-    with st.expander("Quy trình suy luận và tra cứu", expanded=False):
+    title = "Reasoning & Retrieval Process" if lang == "en" else "Quy trình suy luận và tra cứu"
+    with st.expander(title, expanded=False):
         st.markdown(f"<div class='thought-box'>{thought}</div>", unsafe_allow_html=True)
 
 
-def render_citations(citations: List[Dict[str, Any]]):
+def render_citations(citations: List[Dict[str, Any]], lang: str = "vi"):
     """Renders page-level citations."""
     if not citations:
         return
-    with st.expander(f"Nguồn tài liệu trích dẫn ({len(citations)})", expanded=False):
+    title = f"Document Citations ({len(citations)})" if lang == "en" else f"Nguồn tài liệu trích dẫn ({len(citations)})"
+    with st.expander(title, expanded=False):
         for idx, cit in enumerate(citations, start=1):
-            source = cit.get("source", "Tài liệu")
+            source = cit.get("source", "Document" if lang == "en" else "Tài liệu")
             page = cit.get("page", 1)
             score = cit.get("score", 0.0)
             text = cit.get("text", "")
+            page_label = f"Page {page}" if lang == "en" else f"Trang {page}"
+            sim_label = "Relevance" if lang == "en" else "Độ tương đồng"
             st.markdown(
                 f"""
                 <div class="citation-card">
-                    <div class="citation-header">[{idx}] {source} (Trang {page}) — Độ tương đồng: {score:.2f}</div>
+                    <div class="citation-header">[{idx}] {source} ({page_label}) — {sim_label}: {score:.2f}</div>
                     <div class="citation-snippet">{text}</div>
                 </div>
                 """,
@@ -197,3 +201,19 @@ def render_suggested_prompts(on_click_callback):
     for idx, p in enumerate(prompts):
         if cols[idx].button(p, key=f"sug_{idx}", use_container_width=True):
             on_click_callback(p)
+
+
+def render_interactive_chips(chips: List[str], on_click_callback, key_prefix: str = "chip", lang: str = "vi"):
+    """Renders interactive quick-action pill buttons below an assistant answer on a single row."""
+    if not chips:
+        return
+    title = "Follow-up Inquiries & Related Topics:" if lang == "en" else "Gợi ý câu hỏi tiếp theo & Chủ đề liên quan:"
+    st.markdown(
+        f"<div class='chips-title' style='margin-top: 10px; margin-bottom: 6px; font-size: 13px; font-weight: 500; color: #a1a1aa;'>{title}</div>",
+        unsafe_allow_html=True
+    )
+    cols = st.columns(len(chips))
+    for idx, chip_text in enumerate(chips):
+        clean_text = chip_text.strip().lstrip("-*•0123456789. ")
+        if cols[idx].button(clean_text, key=f"{key_prefix}_{idx}", use_container_width=True, help=clean_text):
+            on_click_callback(clean_text)

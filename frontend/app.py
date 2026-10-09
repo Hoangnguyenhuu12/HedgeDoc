@@ -28,13 +28,14 @@ from HedgeDoc.frontend.components import (
     render_ocr_inspection,
     render_thinking_box,
     render_citations,
-    render_suggested_prompts
+    render_suggested_prompts,
+    render_interactive_chips
 )
+from HedgeDoc.agents.language_utils import detect_language, clean_doc_title
 
 # Page configuration
 st.set_page_config(
     page_title="HedgeDoc — Nền tảng Trí tuệ Tài liệu",
-    page_icon="📚",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -48,6 +49,22 @@ if "orchestrator" not in st.session_state or not hasattr(st.session_state.orches
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
+else:
+    # Auto-sanitize any lingering messages from previous session states
+    for m in st.session_state.messages:
+        if "Lễ tân" in m.get("content", "") or "lễ tân" in m.get("content", ""):
+            m["content"] = (
+                "Tôi là **HedgeDoc** — Nền tảng Trí tuệ và Khai phá Tri thức Tài liệu.\n\n"
+                "**Khả năng chính:**\n\n"
+                "- **Kiểm định chất lượng**: Đo lường độ nét, tương phản, độ phân giải tài liệu trước khi bóc tách.\n"
+                "- **Bóc tách OCR**: Trích xuất chính xác văn bản số, bảng biểu và cấu trúc dữ liệu.\n"
+                "- **Tra cứu thông minh**: Phân đoạn, lập chỉ mục véc-tơ và trả lời câu hỏi trực tiếp từ tài liệu đã nạp."
+            )
+        if "Lễ tân" in m.get("thought", "") or "lễ tân" in m.get("thought", ""):
+            m["thought"] = (
+                "[Bộ điều phối]: Nhận diện câu hỏi thông tin chung / hướng dẫn hệ thống.\n"
+                "-> Phản hồi trực tiếp, súc tích về tính năng và tài liệu hiện có trong kho."
+            )
 
 if "latest_assessment" not in st.session_state:
     st.session_state.latest_assessment = None
@@ -110,16 +127,19 @@ with st.sidebar:
         indexed_docs = orchestrator.list_indexed_documents()
         if indexed_docs:
             for idx, d in enumerate(indexed_docs):
-                row_col1, row_col2 = st.columns([0.82, 0.18])
+                row_col1, row_col2 = st.columns([0.84, 0.16])
+                clean_t = clean_doc_title(d["file_name"])
+                ext = Path(d["file_name"]).suffix.lower()
                 with row_col1:
                     st.markdown(
-                        f"<div style='font-size: 13px; line-height: 1.4; padding-top: 4px; word-break: break-all;'>"
-                        f"<b>{d['file_name']}</b><br/>"
-                        f"<span style='color: #94a3b8; font-size: 11px;'>{d['chunk_count']} đoạn véc-tơ</span>"
+                        f"<div style='font-size: 13px; line-height: 1.4; padding-top: 2px; word-break: break-word;'>"
+                        f"<b>{clean_t}</b><span style='color: #71717a; font-size: 12px; font-weight: normal;'>{ext}</span><br/>"
+                        f"<span style='color: #a1a1aa; font-size: 11px;'>{d['chunk_count']} đoạn véc-tơ</span>"
                         f"</div>",
                         unsafe_allow_html=True
                     )
                 with row_col2:
+                    st.markdown('<span class="del-btn-anchor"></span>', unsafe_allow_html=True)
                     if st.button("✕", key=f"del_btn_{idx}", help=f"Xóa {d['file_name']}"):
                         st.session_state.pending_delete = d["file_name"]
 
@@ -161,30 +181,46 @@ with st.sidebar:
 # ==============================================================================
 render_header()
 
+from HedgeDoc.agents.language_utils import detect_language
+
 def handle_user_query(prompt_text: str):
     """Appends query and triggers generation."""
-    st.session_state.messages.append({"role": "user", "content": prompt_text})
+    st.session_state.messages.append({
+        "role": "user",
+        "content": prompt_text,
+        "lang": detect_language(prompt_text)
+    })
     st.rerun()
 
 # Display chat history
-for msg in st.session_state.messages:
+for msg_idx, msg in enumerate(st.session_state.messages):
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
+        msg_lang = msg.get("lang") or detect_language(msg.get("content", ""))
         if msg.get("thought"):
-            render_thinking_box(msg["thought"])
+            render_thinking_box(msg["thought"], lang=msg_lang)
         if msg.get("citations"):
-            render_citations(msg["citations"])
+            render_citations(msg["citations"], lang=msg_lang)
+        if msg.get("suggested_followups") and msg_idx == len(st.session_state.messages) - 1:
+            render_interactive_chips(
+                msg["suggested_followups"],
+                handle_user_query,
+                key_prefix=f"hist_sug_{msg_idx}",
+                lang=msg_lang
+            )
 
 # Handle pending assistant response
 if st.session_state.messages and st.session_state.messages[-1]["role"] == "user":
     user_prompt = st.session_state.messages[-1]["content"]
+    query_lang = detect_language(user_prompt)
     with st.chat_message("assistant"):
         history = [
             {"role": m["role"], "content": m["content"]}
             for m in st.session_state.messages[:-1]
         ]
 
-        with st.spinner("Đang định tuyến và trích xuất căn cứ tài liệu..."):
+        spinner_text = "Routing and retrieving grounded citations..." if query_lang == "en" else "Đang định tuyến và trích xuất căn cứ tài liệu..."
+        with st.spinner(spinner_text):
             res = orchestrator.stream_query(
                 query_text=user_prompt,
                 top_k=top_k,
@@ -194,9 +230,10 @@ if st.session_state.messages and st.session_state.messages[-1]["role"] == "user"
         thought = res.get("thought", "")
         citations = res.get("citations", [])
         stream_gen = res.get("stream")
+        suggested_followups = res.get("suggested_followups", [])
 
         if thought:
-            render_thinking_box(thought)
+            render_thinking_box(thought, lang=query_lang)
 
         if stream_gen:
             def safe_stream():
@@ -204,29 +241,46 @@ if st.session_state.messages and st.session_state.messages[-1]["role"] == "user"
                     for token in stream_gen:
                         yield token
                 except Exception as exc:
-                    yield f"\n\n*(Thông báo: Quá trình truyền token bị gián đoạn: {str(exc)})*"
+                    err_msg = f"\n\n*(Notice: Token streaming interrupted: {str(exc)})*" if query_lang == "en" else f"\n\n*(Thông báo: Quá trình truyền token bị gián đoạn: {str(exc)})*"
+                    yield err_msg
 
             answer = st.write_stream(safe_stream())
         else:
-            answer = res.get("answer", "Không tìm thấy nội dung liên quan trong tài liệu.")
+            default_not_found = "No relevant content found in the documents." if query_lang == "en" else "Không tìm thấy nội dung liên quan trong tài liệu."
+            answer = res.get("answer", default_not_found)
             st.markdown(answer)
 
         if citations:
-            render_citations(citations)
+            render_citations(citations, lang=query_lang)
+
+        if suggested_followups:
+            render_interactive_chips(
+                suggested_followups,
+                handle_user_query,
+                key_prefix="live_sug",
+                lang=query_lang
+            )
 
         st.session_state.messages.append({
             "role": "assistant",
             "content": answer,
             "thought": thought,
-            "citations": citations
+            "citations": citations,
+            "suggested_followups": suggested_followups,
+            "lang": query_lang
         })
         st.rerun()
 
 # Show suggested prompts ONLY when conversation is empty
 if not st.session_state.messages:
-    render_suggested_prompts(handle_user_query)
+    general_prompts = [
+        "Tóm tắt nội dung tài liệu",
+        "Tra cứu quy định & điều khoản chính",
+        "Kiểm định chất lượng tài liệu scan"
+    ]
+    render_interactive_chips(general_prompts, handle_user_query, key_prefix="init_sug", lang="vi")
 
 # Chat input box
-user_input = st.chat_input("Nhập câu hỏi tra cứu tài liệu tại đây...")
+user_input = st.chat_input("Nhập câu hỏi tra cứu tài liệu / Ask a question...")
 if user_input:
     handle_user_query(user_input)
