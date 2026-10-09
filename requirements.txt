@@ -9,7 +9,8 @@ PyMuPDF>=1.23.0  # fitz: Cực nhanh, trích xuất text và số trang chính x
 chromadb>=0.4.22
 
 # LLM Providers
-google-generativeai>=0.8.0
+google-genai>=0.1.0
+google-generativeai>=0.8.0  # Optional fallback
 # openai>=1.0.0 # Bỏ comment khi cần dùng thêm OpenAI / DeepSeek
 
 # Frontend UI
