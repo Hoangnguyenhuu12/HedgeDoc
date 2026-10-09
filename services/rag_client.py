@@ -135,7 +135,11 @@ class RAGClient:
 
         pipeline = self._get_local_pipeline()
         import doc_rag_pkg.schemas.rag_contracts as rag_contracts
-        req = rag_contracts.RAGQueryRequest(query=query_text, top_k=top_k)
+        req = rag_contracts.RAGQueryRequest(
+            query=query_text,
+            top_k=top_k,
+            conversation_history=chat_history or []
+        )
         res = pipeline.query(req)
 
         citations_list = []
@@ -172,7 +176,7 @@ class RAGClient:
         req = rag_contracts.RAGQueryRequest(
             query=query_text,
             top_k=top_k,
-            conversation_history=chat_history
+            conversation_history=chat_history or []
         )
 
         stream_gen = pipeline.stream_query(req)
